@@ -1,7 +1,7 @@
 # Change Log
 
-## [0.0.2](https://github.com/kidunot89/wp-graphql-woocommerce/tree/0.0.2) (2019-04-22)
-[Full Changelog](https://github.com/kidunot89/wp-graphql-woocommerce/compare/0.0.1...0.0.2)
+## [v0.0.2-beta](https://github.com/kidunot89/wp-graphql-woocommerce/tree/v0.0.2-beta) (2019-04-22)
+[Full Changelog](https://github.com/kidunot89/wp-graphql-woocommerce/compare/0.0.1...v0.0.2-beta)
 
 **Implemented enhancements:**
 
@@ -20,10 +20,6 @@
 - no queries work [\#31](https://github.com/kidunot89/wp-graphql-woocommerce/issues/31)
 - after\_success script added [\#32](https://github.com/kidunot89/wp-graphql-woocommerce/pull/32) ([kidunot89](https://github.com/kidunot89))
 - Polishing Product types and connections [\#22](https://github.com/kidunot89/wp-graphql-woocommerce/pull/22) ([kidunot89](https://github.com/kidunot89))
-
-**Closed issues:**
-
-- v0.0.2-beta [\#33](https://github.com/kidunot89/wp-graphql-woocommerce/issues/33)
 
 **Merged pull requests:**
 
