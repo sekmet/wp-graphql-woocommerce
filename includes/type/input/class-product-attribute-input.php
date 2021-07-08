@@ -2,7 +2,7 @@
 /**
  * WPInputObjectType - ProductAttributeInput
  *
- * @package \WPGraphQL\WooCommerce\Type\WPInputObject
+ * @package WPGraphQL\WooCommerce\Type\WPInputObject
  * @since   0.1.0
  */
 
@@ -12,6 +12,7 @@ namespace WPGraphQL\WooCommerce\Type\WPInputObject;
  * Class Product_Attribute_Input
  */
 class Product_Attribute_Input {
+
 	/**
 	 * Registers type
 	 */
@@ -21,11 +22,11 @@ class Product_Attribute_Input {
 			array(
 				'description' => __( 'Options for ordering the connection', 'wp-graphql-woocommerce' ),
 				'fields'      => array(
-					'attribute'     => array(
+					'attributeName'  => array(
 						'type' => array( 'non_null' => 'String' ),
 					),
-					'attributeTerm' => array(
-						'type' => array( 'non_null' => 'String' ),
+					'attributeValue' => array(
+						'type' => 'String',
 					),
 				),
 			)

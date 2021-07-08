@@ -23,12 +23,12 @@ class Variation_Attribute_Connection_Resolver {
 	/**
 	 * Returns data array from WC_Product_Attribute ArrayAccess object.
 	 *
-	 * @param WC_Product_Attribute $attrs        - WC_Product_Attribute object.
-	 * @param string               $parent_id - ProductVariation Relay ID.
+	 * @param array  $attrs      WC_Product_Attribute object.
+	 * @param string $parent_id  ProductVariation Relay ID.
 	 *
 	 * @return array
 	 */
-	public function to_data_array( $attrs = array(), $parent_id = 0 ) {
+	public static function to_data_array( $attrs = array(), $parent_id = 0 ) {
 		$attributes = array();
 		if ( array( '0' ) !== $attrs ) {
 			foreach ( $attrs as $name => $value ) {
@@ -36,6 +36,7 @@ class Variation_Attribute_Connection_Resolver {
 				if ( empty( $term ) ) {
 					$attributes[] = array(
 						// ID create for caching only, not object retrieval.
+						// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 						'id'          => base64_encode( $parent_id . '||' . $name . '||' . $value ),
 						'attributeId' => 0,
 						'name'        => $name,
@@ -44,6 +45,7 @@ class Variation_Attribute_Connection_Resolver {
 				} else {
 					$attributes[] = array(
 						// ID create for caching only, not object retrieval.
+						// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 						'id'          => base64_encode( $parent_id . '||' . $name . '||' . $value ),
 						'attributeId' => $term->term_id,
 						'name'        => $term->taxonomy,
@@ -66,9 +68,9 @@ class Variation_Attribute_Connection_Resolver {
 	 */
 	public function resolve( $source, array $args, AppContext $context, ResolveInfo $info ) {
 		if ( is_a( $source, Product::class ) ) {
-			$attributes = $this->to_data_array( $source->default_attributes, $source->ID );
+			$attributes = self::to_data_array( $source->default_attributes, $source->ID );
 		} else {
-			$attributes = $this->to_data_array( $source->attributes, $source->ID );
+			$attributes = self::to_data_array( $source->attributes, $source->ID );
 		}
 
 		$connection = Relay::connectionFromArray( $attributes, $args );

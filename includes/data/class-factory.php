@@ -13,6 +13,7 @@ namespace WPGraphQL\WooCommerce\Data;
 use GraphQL\Deferred;
 use GraphQL\Error\UserError;
 use GraphQL\Type\Definition\ResolveInfo;
+use function WC;
 use WPGraphQL\AppContext;
 use WPGraphQL\WooCommerce\Data\Connection\Coupon_Connection_Resolver;
 use WPGraphQL\WooCommerce\Data\Connection\Customer_Connection_Resolver;
@@ -27,7 +28,10 @@ use WPGraphQL\WooCommerce\Data\Connection\Tax_Rate_Connection_Resolver;
 use WPGraphQL\WooCommerce\Data\Connection\Shipping_Method_Connection_Resolver;
 use WPGraphQL\WooCommerce\Data\Connection\Cart_Item_Connection_Resolver;
 use WPGraphQL\WooCommerce\Data\Connection\Payment_Gateway_Connection_Resolver;
+use WPGraphQL\WooCommerce\Data\Connection\Downloadable_Item_Connection_Resolver;
 use WPGraphQL\WooCommerce\Model\Order_Item;
+use WPGraphQL\WooCommerce\Model\Product;
+use WPGraphQL\WooCommerce\Model\Customer;
 use WPGraphQL\WooCommerce\Model\Tax_Rate;
 use WPGraphQL\WooCommerce\Model\Shipping_Method;
 
@@ -35,6 +39,16 @@ use WPGraphQL\WooCommerce\Model\Shipping_Method;
  * Class Factory
  */
 class Factory {
+	/**
+	 * Returns the current woocommerce customer object tied to the current session.
+	 *
+	 * @return Customer
+	 * @access public
+	 */
+	public static function resolve_session_customer() {
+		return new Customer();
+	}
+
 	/**
 	 * Returns the Customer store object for the provided user ID
 	 *
@@ -50,7 +64,7 @@ class Factory {
 		}
 		$customer_id = absint( $id );
 		$loader      = $context->getLoader( 'wc_customer' );
-		$loader->buffer( [ $customer_id ] );
+		$loader->buffer( array( $customer_id ) );
 		return new Deferred(
 			function () use ( $loader, $customer_id ) {
 				return $loader->load( $customer_id );
@@ -71,12 +85,11 @@ class Factory {
 		if ( empty( $id ) || ! absint( $id ) ) {
 			return null;
 		}
-		$object_id = absint( $id );
-		$loader    = $context->getLoader( 'wc_post_crud' );
-		$loader->buffer( [ $object_id ] );
+
+		$context->getLoader( 'wc_post' )->buffer( array( $id ) );
 		return new Deferred(
-			function () use ( $loader, $object_id ) {
-				return $loader->load( $object_id );
+			function () use ( $id, $context ) {
+				return $context->getLoader( 'wc_post' )->load( $id );
 			}
 		);
 	}
@@ -104,41 +117,24 @@ class Factory {
 	/**
 	 * Returns the tax rate Model for the tax rate ID.
 	 *
-	 * @param int $id - Tax rate ID.
+	 * @param string     $id - Tax rate ID.
+	 * @param AppContext $context - AppContext object.
 	 *
-	 * @return Tax_Rate
-	 * @access public
-	 * @throws UserError Invalid object.
+	 * @return Deferred object
 	 */
-	public static function resolve_tax_rate( $id ) {
-		global $wpdb;
-
-		$rate = \WC_Tax::_get_tax_rate( $id, OBJECT );
-		if ( ! \is_wp_error( $rate ) && ! empty( $rate ) ) {
-			// Get locales from a tax rate.
-			$locales = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT location_code, location_type
-					FROM {$wpdb->prefix}woocommerce_tax_rate_locations
-					WHERE tax_rate_id = %d",
-					$rate->tax_rate_id
-				)
-			);
-
-			foreach ( $locales as $locale ) {
-				if ( empty( $rate->{'tax_rate_' . $locale->location_type} ) ) {
-					$rate->{'tax_rate_' . $locale->location_type} = array();
-				}
-				$rate->{'tax_rate_' . $locale->location_type}[] = $locale->location_code;
-			}
-
-			return new Tax_Rate( $rate );
-		} else {
-			throw new UserError(
-				/* translators: %s: Tax rate ID */
-				sprintf( __( 'No Tax Rate assigned to ID %s was found ', 'wp-graphql-woocommerce' ), $id )
-			);
+	public static function resolve_tax_rate( $id, AppContext $context ) {
+		if ( empty( $id ) || ! is_numeric( $id ) ) {
+			return null;
 		}
+
+		$id     = absint( $id );
+		$loader = $context->getLoader( 'tax_rate' );
+		$loader->buffer( array( $id ) );
+		return new Deferred(
+			function () use ( $loader, $id ) {
+				return $loader->load( $id );
+			}
+		);
 	}
 
 	/**
@@ -166,16 +162,33 @@ class Factory {
 	}
 
 	/**
+	 * Resolves the WooCommerce cart instance.
+	 *
+	 * @return \WC_Cart
+	 */
+	public static function resolve_cart() {
+		return WC()->cart;
+	}
+
+	/**
 	 * Resolves a cart item by key.
 	 *
-	 * @param string $id cart item key.
+	 * @param string     $key      Cart item key.
+	 * @param AppContext $context  AppContext object.
 	 *
-	 * @return object
+	 * @return Deferred object
 	 */
-	public static function resolve_cart_item( $id ) {
-		$item = WC()->cart->get_cart_item( $id );
+	public static function resolve_cart_item( $key, AppContext $context ) {
+		if ( empty( $key ) ) {
+			return null;
+		}
 
-		return $item;
+		$context->getLoader( 'cart_item' )->buffer( array( $key ) );
+		return new Deferred(
+			function () use ( $key, $context ) {
+				return $context->getLoader( 'cart_item' )->load( $key );
+			}
+		);
 	}
 
 	/**
@@ -186,13 +199,33 @@ class Factory {
 	 * @return object
 	 */
 	public static function resolve_cart_fee( $id ) {
-		$fees = WC()->cart->get_fees();
-
-		if ( ! empty( $fees[ $id ] ) ) {
-			return $fees[ $id ];
+		if ( ! empty( self::resolve_cart()->get_fees()[ $id ] ) ) {
+			return self::resolve_cart()->get_fees()[ $id ];
 		}
 
 		return null;
+	}
+
+	/**
+	 * Resolves a downloadable item by ID.
+	 *
+	 * @param int        $id       Downloadable item ID.
+	 * @param AppContext $context  AppContext object.
+	 *
+	 * @return Deferred object
+	 */
+	public static function resolve_downloadable_item( $id, AppContext $context ) {
+		if ( empty( $id ) || ! absint( $id ) ) {
+			return null;
+		}
+		$object_id = absint( $id );
+		$loader    = $context->getLoader( 'downloadable_item' );
+		$loader->buffer( array( $object_id ) );
+		return new Deferred(
+			function () use ( $loader, $object_id ) {
+				return $loader->load( $object_id );
+			}
+		);
 	}
 
 	/**
@@ -221,7 +254,7 @@ class Factory {
 				$node = self::resolve_shipping_method( $id );
 				break;
 			case 'tax_rate':
-				$node = self::resolve_tax_rate( $id );
+				$node = self::resolve_tax_rate( $id, $context );
 				break;
 		}
 
@@ -464,8 +497,24 @@ class Factory {
 	 * @access public
 	 */
 	public static function resolve_cart_item_connection( $source, array $args, AppContext $context, ResolveInfo $info ) {
-		$resolver = new Cart_Item_Connection_Resolver();
-		return $resolver->resolve( $source, $args, $context, $info );
+		$resolver = new Cart_Item_Connection_Resolver( $source, $args, $context, $info );
+		return $resolver->get_connection();
+	}
+
+	/**
+	 * Resolves DownloadableItem connections
+	 *
+	 * @param mixed       $source     - Data resolver for connection source.
+	 * @param array       $args       - Connection arguments.
+	 * @param AppContext  $context    - AppContext object.
+	 * @param ResolveInfo $info       - ResolveInfo object.
+	 *
+	 * @return array
+	 * @access public
+	 */
+	public static function resolve_downloadable_item_connection( $source, array $args, AppContext $context, ResolveInfo $info ) {
+		$resolver = new Downloadable_Item_Connection_Resolver( $source, $args, $context, $info );
+		return $resolver->get_connection();
 	}
 
 	/**

@@ -10,17 +10,23 @@
 
 namespace WPGraphQL\WooCommerce\Data\Connection;
 
-use WPGraphQL\Data\Connection\AbstractConnectionResolver;
 use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
-use WPGraphQL\Extension\WooCommerce\Model\Customer;
-use WPGraphQL\Extension\WooCommerce\Model\Order;
+use WPGraphQL\Data\Connection\AbstractConnectionResolver;
+use WPGraphQL\WooCommerce\Model\Customer;
+use WPGraphQL\WooCommerce\Model\Order;
+use WPGraphQL\WooCommerce\Model\Refund;
 
 /**
  * Class Refund_Connection_Resolver
+ *
+ * @deprecated v0.10.0
  */
 class Refund_Connection_Resolver extends AbstractConnectionResolver {
-	use Common_CPT_Input_Sanitize_Functions;
+	/**
+	 * Include CPT Loader connection common functions.
+	 */
+	use WC_CPT_Loader_Common;
 
 	/**
 	 * The name of the post type, or array of post types the connection resolver is resolving for
@@ -46,6 +52,26 @@ class Refund_Connection_Resolver extends AbstractConnectionResolver {
 		 * Call the parent construct to setup class data
 		 */
 		parent::__construct( $source, $args, $context, $info );
+	}
+
+	/**
+	 * Return the name of the loader to be used with the connection resolver
+	 *
+	 * @return string
+	 */
+	public function get_loader_name() {
+		return 'wc_post';
+	}
+
+	/**
+	 * Given an ID, return the model for the entity or null
+	 *
+	 * @param integer $id  Node ID.
+	 *
+	 * @return mixed|Refund|null
+	 */
+	public function get_node_by_id( $id ) {
+		return $this->get_cpt_model_by_id( $id );
 	}
 
 	/**
@@ -84,7 +110,7 @@ class Refund_Connection_Resolver extends AbstractConnectionResolver {
 		/**
 		 * Collect the input_fields and sanitize them to prepare them for sending to the WP_Query
 		 */
-		$input_fields = [];
+		$input_fields = array();
 		if ( ! empty( $this->args['where'] ) ) {
 			$input_fields = $this->sanitize_input_fields( $this->args['where'] );
 		}
@@ -116,20 +142,19 @@ class Refund_Connection_Resolver extends AbstractConnectionResolver {
 		switch ( true ) {
 			case is_a( $this->source, Order::class ):
 				if ( 'refunds' === $this->info->fieldName ) {
-					unset( $query_args['post_parent__in'] );
-					$query_args['post_parent'] = $this->source->ID;
+					$query_args['parent'] = $this->source->ID;
 				}
 				break;
 			case is_a( $this->source, Customer::class ):
 				if ( 'refunds' === $this->info->fieldName ) {
-					if ( ! empty( $args['meta_query'] ) ) {
-						$args['meta_query'] = array(); // WPCS: slow query ok.
-					}
-					$args['meta_query'][] = array(
-						'key'   => '_customer_user',
-						'value' => $this->source->ID,
-						'type'  => 'NUMERIC',
+					$customer_orders               = \wc_get_orders(
+						array(
+							'customer_id'   => $this->source->ID,
+							'no_rows_found' => true,
+							'return'        => 'ids',
+						)
 					);
+					$query_args['post_parent__in'] = array_map( 'absint', $customer_orders );
 				}
 				break;
 			default:
@@ -171,7 +196,7 @@ class Refund_Connection_Resolver extends AbstractConnectionResolver {
 	 *
 	 * @return array
 	 */
-	public function get_items() {
+	public function get_ids() {
 		return ! empty( $this->query->get_orders() ) ? $this->query->get_orders() : array();
 	}
 
@@ -247,5 +272,16 @@ class Refund_Connection_Resolver extends AbstractConnectionResolver {
 		);
 
 		return $args;
+	}
+
+	/**
+	 * Wrapper for "WC_Connection_Functions::is_valid_post_offset()"
+	 *
+	 * @param integer $offset Post ID.
+	 *
+	 * @return bool
+	 */
+	public function is_valid_offset( $offset ) {
+		return $this->is_valid_post_offset( $offset );
 	}
 }

@@ -119,10 +119,11 @@ class ProductHelper extends WCG_Helper {
 		return $product->save();
 	}
 
-	public function create_grouped( $args = array() ) {
-		$children = array(
-			$this->create_simple(),
-		);
+	public function create_grouped( $args = array(), $children = array() ) {
+		if ( empty( $children ) ) {
+			$children = array( $this->create_simple() );
+		}
+
 		$product          = new WC_Product_Grouped();
 		$product->set_props(
 			array_merge(
@@ -140,16 +141,20 @@ class ProductHelper extends WCG_Helper {
 
 	public function create_variable( $args = array() ) {
 		$product = new WC_Product_Variable();
-		$product->set_props(
-			array_merge(
-				array(
-					'name' => $this->dummy->product(),
-					'slug' => $this->next_slug(),
-					'sku'  => 'DUMMY VARIABLE SKU ' . $this->index,
-				),
-				$args
-			)
+		$props = array_merge(
+			array(
+				'name' => $this->dummy->product(),
+				'slug' => $this->next_slug(),
+				'sku'  => 'DUMMY VARIABLE SKU ' . $this->index,
+			),
+			$args
 		);
+
+		foreach ( $props as $key => $value ) {
+			if ( is_callable( array( $product, "set_{$key}" ) ) ) {
+				$product->{"set_{$key}"}( $value );
+			}
+		}
 
 		if ( ! empty( $args['meta_data'] ) ) {
 			$product->set_meta_data( $args['meta_data'] );
@@ -165,14 +170,14 @@ class ProductHelper extends WCG_Helper {
 		$attribute_1->set_visible( true );
 		$attribute_1->set_variation( true );
 
-		$attribute_data = $this->create_attribute( 'color', array( 'red', 'blue', 'green' ) );
+		$attribute_data = $this->create_attribute( 'color', array( 'red' ) );
 		$attribute_2    = new WC_Product_Attribute();
 		$attribute_2->set_id( $attribute_data['attribute_id'] );
 		$attribute_2->set_name( $attribute_data['attribute_taxonomy'] );
 		$attribute_2->set_options( $attribute_data['term_ids'] );
 		$attribute_2->set_position( 2 );
 		$attribute_2->set_visible( true );
-		$attribute_2->set_variation( true );
+		$attribute_2->set_variation( false );
 
 		$product->set_attributes( array( $attribute_1, $attribute_2 ) );
 		$product->set_default_attributes( array( 'size' => 'small' ) );
@@ -188,7 +193,7 @@ class ProductHelper extends WCG_Helper {
 			$this->create_simple(),
 			$this->create_simple(),
 		);
-		$tag_ids            = array( $this->create_product_tag( 'related' ) ); 
+		$tag_ids            = array( $this->create_product_tag( 'related' ) );
 		$related_product_id = $this->create_simple( array( 'tag_ids' => $tag_ids ) );
 
 		return array(
@@ -210,7 +215,7 @@ class ProductHelper extends WCG_Helper {
 
 		// Make sure caches are clean.
 		delete_transient( 'wc_attribute_taxonomies' );
-		WC_Cache_Helper::incr_cache_prefix( 'woocommerce-attributes' );
+		WC_Cache_Helper::invalidate_cache_group( 'woocommerce-attributes' );
 
 		// These are exported as labels, so convert the label to a name if possible first.
 		$attribute_labels = wp_list_pluck( wc_get_attribute_taxonomies(), 'attribute_label', 'attribute_name' );
@@ -283,9 +288,13 @@ class ProductHelper extends WCG_Helper {
 		return $return;
 	}
 
-	public function create_download( $id = 0 ) {
+	public function create_download() {
+		return self::createDownload( ...func_get_args() );
+	}
+
+	public static function createDownload( $id = 0 ) {
 		$download = new WC_Product_Download();
-		$download->set_id( 'testid' );
+		$download->set_id( wp_generate_uuid4() );
 		$download->set_name( 'Test Name' );
 		$download->set_file( 'http://example.com/file.jpg' );
 
@@ -300,17 +309,21 @@ class ProductHelper extends WCG_Helper {
 
 	public function print_query( $id, $raw = false ) {
 		$data = wc_get_product( $id );
+		$is_shop_manager = false;
+		$user = wp_get_current_user();
+		if ( $user && in_array( 'shop_manager', (array) $user->roles ) ) {
+			$is_shop_manager = true;
+		}
 
 		return array(
 			'id'                => $this->to_relay_id( $id ),
-			'productId'         => $data->get_id(),
+			'databaseId'        => $data->get_id(),
 			'name'              => $data->get_name(),
 			'slug'              => $data->get_slug(),
 			'date'              => $data->get_date_created()->__toString(),
 			'modified'          => $data->get_date_modified()->__toString(),
 			'status'            => $data->get_status(),
 			'featured'          => $data->get_featured(),
-			'catalogVisibility' => strtoupper( $data->get_catalog_visibility() ),
 			'description'       => ! empty( $data->get_description() )
 				? $raw
 					? $data->get_description()
@@ -336,7 +349,6 @@ class ProductHelper extends WCG_Helper {
 				: null,
 			'dateOnSaleFrom'    => $data->get_date_on_sale_from(),
 			'dateOnSaleTo'      => $data->get_date_on_sale_to(),
-			'totalSales'        => $data->get_total_sales(),
 			'taxStatus'         => strtoupper( $data->get_tax_status() ),
 			'taxClass'          => ! empty( $data->get_tax_class() )
 				? $data->get_tax_class()
@@ -366,6 +378,9 @@ class ProductHelper extends WCG_Helper {
 			'purchasable'       => $data->is_purchasable(),
 			'shippingRequired'  => $data->needs_shipping(),
 			'shippingTaxable'   => $data->is_shipping_taxable(),
+			'link'              => get_post_permalink( $id ),
+			'totalSales'        => $is_shop_manager ? $data->get_total_sales() : null,
+			'catalogVisibility' => $is_shop_manager ? strtoupper( $data->get_catalog_visibility() ) :null,
 		);
 	}
 
@@ -377,9 +392,12 @@ class ProductHelper extends WCG_Helper {
 
 		foreach( $attributes as $attribute_name => $attribute ) {
 			$results[] = array(
-				'id'          => base64_encode( $attribute_name . '||' . $id . '||' . $attribute->get_id() ),
+				'id'          => base64_encode( $attribute_name . ':' . $id . ':' . $attribute->get_name() ),
 				'attributeId' => $attribute->get_id(),
-				'name'        => $attribute->get_name(),
+				'name'        => str_replace( 'pa_', '', $attribute->get_name() ),
+				'label'       => $attribute->is_taxonomy()
+					? ucwords( get_taxonomy( $attribute->get_name() )->labels->singular_name )
+					: null,
 				'options'     => $attribute->get_slugs(),
 				'position'    => $attribute->get_position(),
 				'visible'     => $attribute->get_visible(),
@@ -396,7 +414,7 @@ class ProductHelper extends WCG_Helper {
 		if ( empty( $downloads ) ) {
 			return null;
 		}
-		
+
 		$results = array();
 		foreach ( $downloads as $download ) {
 			$results[] = array(
@@ -410,7 +428,7 @@ class ProductHelper extends WCG_Helper {
 				'file'            => $download->get_file(),
 			);
 		}
-		
+
 		return $results;
 	}
 
@@ -450,5 +468,46 @@ class ProductHelper extends WCG_Helper {
 		}
 
 		return null;
+	}
+
+	public function create_review( $product_id, $args = array() ) {
+		$firstName = $this->dummy->firstname();
+		$data = array_merge(
+			array(
+				'comment_post_ID'      => $product_id,
+				'comment_author'       => $firstName,
+				'comment_author_email' => "{$firstName}@example.com",
+				'comment_author_url'   => '',
+				'comment_content'      => $this->dummy->text(),
+				'comment_approved'     => 1,
+				'comment_type'         => 'review',
+			),
+			$args
+		);
+
+		$comment_id = wp_insert_comment( $data );
+
+		$rating = ! empty( $args['rating'] ) ? $args['rating'] : $this->dummy->number( 0, 5 );
+		update_comment_meta( $comment_id, 'rating', $rating );
+
+		return $comment_id;
+	}
+
+	public function print_review_edges( $ids ) {
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$reviews = array();
+		foreach ( $ids as $review_id ) {
+			$reviews[] = array(
+				'rating' => floatval( get_comment_meta( $review_id, 'rating', true ) ),
+				'node'   => array(
+					'id' => Relay::toGlobalId( 'comment', $review_id )
+				),
+			);
+		}
+
+		return $reviews;
 	}
 }

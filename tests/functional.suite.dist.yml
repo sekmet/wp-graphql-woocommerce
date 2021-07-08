@@ -4,12 +4,13 @@
 # Emulate web requests and make WordPress process them
 
 actor: FunctionalTester
+coverage:
+  enabled: false
 modules:
-    enabled:
-        - REST
-        - WPDb
-        - WPBrowser
-        - Asserts
-        - \Helper\Functional
-    disabled:
-        - WPLoader
+  enabled:
+    - Asserts
+    - REST
+    - WPBrowser
+    - WPDb
+    - WPLoader
+    - \Helper\GraphQLE2E

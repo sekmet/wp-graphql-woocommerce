@@ -4,24 +4,17 @@
  *
  * Registers VariationAttribute WPObject type
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPObject
  * @since   0.0.4
  */
 
 namespace WPGraphQL\WooCommerce\Type\WPObject;
 
-use GraphQL\Error\UserError;
-use GraphQL\Type\Definition\ResolveInfo;
-use GraphQLRelay\Relay;
-use WPGraphQL\AppContext;
-use WPGraphQL\Type\WPObjectType;
-use WPGraphQL\WooCommerce\Data\Factory;
-use WPGraphQL\WooCommerce\Model\Product_Variation;
-
 /**
  * Class Variation_Attribute_Type
  */
 class Variation_Attribute_Type {
+
 	/**
 	 * Register VariationAttribute type to the WPGraphQL schema
 	 */
@@ -30,19 +23,32 @@ class Variation_Attribute_Type {
 			'VariationAttribute',
 			array(
 				'description' => __( 'A product variation attribute object', 'wp-graphql-woocommerce' ),
+				'interfaces'  => array( 'Attribute' ),
 				'fields'      => array(
 					'id'          => array(
 						'type'        => array( 'non_null' => 'ID' ),
-						'description' => __( 'The Id of the order. Equivalent to WP_Post->ID', 'wp-graphql-woocommerce' ),
+						'description' => __( 'The Global ID of the attribute.', 'wp-graphql-woocommerce' ),
 						'resolve'     => function ( $source ) {
 							return isset( $source['id'] ) ? $source['id'] : null;
 						},
 					),
 					'attributeId' => array(
 						'type'        => 'Int',
-						'description' => __( 'The Id of the order. Equivalent to WP_Post->ID', 'wp-graphql-woocommerce' ),
+						'description' => __( 'The Database ID of the attribute.', 'wp-graphql-woocommerce' ),
 						'resolve'     => function ( $source ) {
 							return isset( $source['attributeId'] ) ? $source['attributeId'] : null;
+						},
+					),
+					'label'       => array(
+						'type'        => 'String',
+						'description' => __( 'Label of attribute', 'wp-graphql-woocommerce' ),
+						'resolve'     => function ( $source ) {
+							if ( ! isset( $source['name'] ) ) {
+								return null;
+							}
+
+							$slug = \wc_attribute_taxonomy_slug( $source['name'] );
+							return ucwords( str_replace( '_', ' ', $slug ) );
 						},
 					),
 					'name'        => array(

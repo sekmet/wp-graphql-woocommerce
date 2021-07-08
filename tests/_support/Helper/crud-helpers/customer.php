@@ -76,13 +76,13 @@ class CustomerHelper extends WCG_Helper {
 		return absint( $customer->save() );
 	}
 
-	public function print_query( $id ) {
-		$data = new WC_Customer( $id );
+	public function print_query( $id, $session = false ) {
+		$data = new WC_Customer( $id, $session );
 		$wp_user = get_user_by( 'ID', $data->get_id() );
 
 		return array(
 			'id'                    => $this->to_relay_id( $id ),
-			'customerId'            => $id,
+			'databaseId'            => $id,
 			'isVatExempt'           => $data->get_is_vat_exempt(),
 			'hasCalculatedShipping' => $data->has_calculated_shipping(),
 			'calculatedShipping'    => $data->get_calculated_shipping(),
@@ -99,7 +99,7 @@ class CustomerHelper extends WCG_Helper {
 				? $data->get_date_modified()->__toString()
 				: null,
 			'lastOrder'             => ! empty( $data->get_last_order() )
-				? array( 
+				? array(
 					'id'         => Relay::toGlobalId( 'shop_order', $data->get_last_order()->get_id() ),
 					'customerId' => $data->get_last_order(),
 				)
@@ -183,26 +183,51 @@ class CustomerHelper extends WCG_Helper {
 
 		return array(
 			'id'                    => $this->to_relay_id( $id ),
-			'customerId'            => $id,
-			'isVatExempt'           => null,                                                                  
-			'hasCalculatedShipping' => null,                                                        
-			'calculatedShipping'    => null,                                                           
-			'orderCount'            => null,                                                                   
-			'totalSpent'            => null,                                                                   
-			'username'              => null,                                                                     
-			'email'                 => null,                                                                        
-			'firstName'             => null,                                                                    
-			'lastName'              => null,                                                                     
-			'displayName'           => $data->get_display_name(),                                                                  
-			'role'                  => null,                                                                         
-			'date'                  => null,                                                                         
-			'modified'              => null,                                                                     
-			'lastOrder'             => null,                                                                    
-			'billing'               => null,                                                                      
-			'shipping'              => null,                                                                     
+			'databaseId'            => $id,
+			'isVatExempt'           => null,
+			'hasCalculatedShipping' => null,
+			'calculatedShipping'    => null,
+			'orderCount'            => null,
+			'totalSpent'            => null,
+			'username'              => null,
+			'email'                 => null,
+			'firstName'             => null,
+			'lastName'              => null,
+			'displayName'           => $data->get_display_name(),
+			'role'                  => null,
+			'date'                  => null,
+			'modified'              => null,
+			'lastOrder'             => null,
+			'billing'               => null,
+			'shipping'              => null,
 			'isPayingCustomer'      => null,
 			'jwtAuthToken'          => null,
 			'jwtRefreshToken'       => null,
 		);
+	}
+
+	public function print_downloadables( $id ) {
+		$items = wc_get_customer_available_downloads( $id );
+
+		if ( empty( $items ) ) {
+			return array();
+		}
+
+		$nodes = array();
+		foreach ( $items as $item ) {
+			$nodes[] = array(
+				'url'                => $item['download_url'],
+				'accessExpires'      => $item['access_expires'],
+				'downloadId'         => $item['download_id'],
+				'downloadsRemaining' => isset( $item['downloads_remaining'] ) && 'integer' === gettype( $item['downloads_remaining'] )
+					? $item['downloads_remaining']
+					: null,
+				'name'               => $item['download_name'],
+				'product'            => array( 'databaseId' => $item['product_id'] ),
+				'download'           => array( 'downloadId' => $item['download_id'] ),
+			);
+		}
+
+		return $nodes;
 	}
 }

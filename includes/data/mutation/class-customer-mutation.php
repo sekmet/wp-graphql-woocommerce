@@ -37,8 +37,6 @@ class Customer_Mutation {
 			$customer_args['shipping'] = self::address_input_mapping( 'shipping', $input['shipping'] );
 		}
 
-		$customer_args['role'] = 'customer';
-
 		/**
 		 * Filters the mappings for input to arguments
 		 *
@@ -46,7 +44,7 @@ class Customer_Mutation {
 		 * @var array  $input         Input data from the GraphQL mutation
 		 * @var string $mutation      What customer mutation is being performed for context
 		 */
-		$customer_args = apply_filters( 'woocommerce_new_customer_data', $customer_args, $input, $mutation );
+		$customer_args = apply_filters( 'woocommerce_new_customer_data', $customer_args, $input, $mutation ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 
 		return $customer_args;
 	}
@@ -68,7 +66,7 @@ class Customer_Mutation {
 			'address2'  => 'address_2',
 		);
 
-		$skip = apply_filters( 'customer_address_input_mapping_skipped', array( 'overwrite' ) );
+		$skip = apply_filters( 'graphql_woocommerce_customer_address_input_mapping_skipped', array( 'overwrite' ) );
 
 		$type    = 'empty_' . $type;
 		$address = ! empty( $input['overwrite'] ) && true === $input['overwrite']
@@ -119,5 +117,19 @@ class Customer_Mutation {
 				'phone' => '',
 			)
 		);
+	}
+
+	/**
+	 * Processes Customer meta data input.
+	 *
+	 * @param \WC_Customer $customer  Customer object.
+	 * @param array        $inputs    Incoming meta data.
+	 */
+	public static function input_meta_data_mapping( $customer, $inputs ) {
+		if ( is_array( $inputs ) ) {
+			foreach ( $inputs as $meta ) {
+				$customer->update_meta_data( $meta['key'], $meta['value'], isset( $meta['id'] ) ? $meta['id'] : '' );
+			}
+		}
 	}
 }

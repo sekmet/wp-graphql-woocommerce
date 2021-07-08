@@ -4,25 +4,23 @@
  *
  * Registers ProductVariation WPObject type
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPObject
  * @since   0.0.1
  */
 
 namespace WPGraphQL\WooCommerce\Type\WPObject;
 
 use GraphQL\Error\UserError;
-use GraphQL\Type\Definition\ResolveInfo;
 use GraphQLRelay\Relay;
 use WPGraphQL\AppContext;
 use WPGraphQL\Data\DataSource;
 use WPGraphQL\WooCommerce\Data\Factory;
-use WPGraphQL\WooCommerce\Model\Product_Variation;
-use WPGraphQL\Type\WPObjectType;
 
 /**
  * Class Product_Variation_Type
  */
 class Product_Variation_Type {
+
 	/**
 	 * Register ProductVariation type to the WPGraphQL schema
 	 */
@@ -31,15 +29,20 @@ class Product_Variation_Type {
 			'ProductVariation',
 			array(
 				'description' => __( 'A product variation object', 'wp-graphql-woocommerce' ),
-				'interfaces'  => array( 'Node' ),
+				'interfaces'  => array(
+					'Node',
+					'NodeWithFeaturedImage',
+					'ContentNode',
+					'UniformResourceIdentifiable',
+				),
 				'fields'      => array(
 					'id'                => array(
 						'type'        => array( 'non_null' => 'ID' ),
 						'description' => __( 'The globally unique identifier for the product variation', 'wp-graphql-woocommerce' ),
 					),
-					'variationId'       => array(
-						'type'        => 'Int',
-						'description' => __( 'The Id of the order. Equivalent to WP_Post->ID', 'wp-graphql-woocommerce' ),
+					'databaseId'        => array(
+						'type'        => array( 'non_null' => 'Int' ),
+						'description' => __( 'The ID of the refund in the database', 'wp-graphql-woocommerce' ),
 					),
 					'name'              => array(
 						'type'        => 'String',
@@ -229,60 +232,10 @@ class Product_Variation_Type {
 						'type'        => 'MediaItem',
 						'description' => __( 'Product variation main image', 'wp-graphql-woocommerce' ),
 						'resolve'     => function( $source, array $args, AppContext $context ) {
-							// @codingStandardsIgnoreLine
-							return DataSource::resolve_post_object( $source->image_id, $context );
-						},
-					),
-					'parent'            => array(
-						'type'        => 'VariableProduct',
-						'description' => __( 'Product variation parent product', 'wp-graphql-woocommerce' ),
-						'resolve'     => function( $source, array $args, AppContext $context ) {
-							return Factory::resolve_crud_object( $source->parent_id, $context );
+							return ! empty( $source->image_id ) ? DataSource::resolve_post_object( $source->image_id, $context ) : null;
 						},
 					),
 				),
-			)
-		);
-
-		register_graphql_field(
-			'RootQuery',
-			'productVariation',
-			array(
-				'type'        => 'ProductVariation',
-				'description' => __( 'A product variation object', 'wp-graphql-woocommerce' ),
-				'args'        => array(
-					'id'          => array(
-						'type'        => 'ID',
-						'description' => __( 'Get the product variation by its global ID', 'wp-graphql-woocommerce' ),
-					),
-					'variationId' => array(
-						'type'        => 'Int',
-						'description' => __( 'Get the product variation by its database ID', 'wp-graphql-woocommerce' ),
-					),
-				),
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					$variation_id = 0;
-					if ( ! empty( $args['id'] ) ) {
-						$id_components = Relay::fromGlobalId( $args['id'] );
-						if ( empty( $id_components['id'] ) || empty( $id_components['type'] ) ) {
-							throw new UserError( __( 'The "id" is invalid', 'wp-graphql-woocommerce' ) );
-						}
-
-						$arg          = 'ID';
-						$variation_id = absint( $id_components['id'] );
-					} elseif ( ! empty( $args['variationId'] ) ) {
-						$arg          = 'database ID';
-						$variation_id = absint( $args['variationId'] );
-					}
-
-					$variation = Factory::resolve_crud_object( $variation_id, $context );
-					if ( get_post( $variation_id )->post_type !== 'product_variation' ) {
-						/* translators: no product variation found error message */
-						throw new UserError( sprintf( __( 'No product variation exists with this %1$s: %2$s' ), $arg, $args['id'] ) );
-					}
-
-					return $variation;
-				},
 			)
 		);
 	}

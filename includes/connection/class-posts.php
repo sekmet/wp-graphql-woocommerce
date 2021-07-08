@@ -9,14 +9,18 @@
 
 namespace WPGraphQL\WooCommerce\Connection;
 
+use GraphQL\Type\Definition\ResolveInfo;
+use WPGraphQL\AppContext;
 use WPGraphQL\Connection\PostObjects;
+use WPGraphQL\Data\Connection\PostObjectConnectionResolver;
 
 /**
  * Class - Posts
  */
 class Posts extends PostObjects {
+
 	/**
-	 * Registers the various connections from other WooCommerce Types to other WordPress post-types
+	 * Registers the various connections from other WooCommerce Types to other WordPress post-types.
 	 */
 	public static function register_connections() {
 		register_graphql_connection(
@@ -26,24 +30,20 @@ class Posts extends PostObjects {
 					'fromType'      => 'Product',
 					'toType'        => 'MediaItem',
 					'fromFieldName' => 'galleryImages',
+					'resolve'       => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
+						$resolver = new PostObjectConnectionResolver( $source, $args, $context, $info, 'attachment' );
+						$resolver->set_query_arg( 'post_type', 'attachment' );
+						$resolver->set_query_arg( 'post__in', $source->gallery_image_ids );
+
+						// Change default ordering.
+						if ( ! in_array( 'orderby', array_keys( $resolver->get_query_args() ), true ) ) {
+							$resolver->set_query_arg( 'orderby', 'post__in' );
+						}
+
+						return $resolver->get_connection();
+					},
 				)
 			)
 		);
-		/**
-		 * From product types to MediaItem
-		 */
-		$product_types = array_values( \WP_GraphQL_WooCommerce::get_enabled_product_types() );
-		foreach ( $product_types as $product_type ) {
-			register_graphql_connection(
-				self::get_connection_config(
-					get_post_type_object( 'attachment' ),
-					array(
-						'fromType'      => $product_type,
-						'toType'        => 'MediaItem',
-						'fromFieldName' => 'galleryImages',
-					)
-				)
-			);
-		}
 	}
 }

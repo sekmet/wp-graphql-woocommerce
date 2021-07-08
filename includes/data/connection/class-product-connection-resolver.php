@@ -10,19 +10,26 @@
 
 namespace WPGraphQL\WooCommerce\Data\Connection;
 
+use GraphQL\Error\InvariantViolation;
 use WPGraphQL\Data\Connection\AbstractConnectionResolver;
 use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
+use WPGraphQL\Model\Term;
 use WPGraphQL\WooCommerce\Model\Coupon;
 use WPGraphQL\WooCommerce\Model\Customer;
 use WPGraphQL\WooCommerce\Model\Product;
-use WPGraphQL\Model\Term;
+use WPGraphQL\WooCommerce\Model\Product_Variation;
 
 /**
  * Class Product_Connection_Resolver
+ *
+ * @deprecated v0.10.0
  */
 class Product_Connection_Resolver extends AbstractConnectionResolver {
-	use Common_CPT_Input_Sanitize_Functions;
+	/**
+	 * Include CPT Loader connection common functions.
+	 */
+	use WC_CPT_Loader_Common;
 
 	/**
 	 * The name of the post type, or array of post types the connection resolver is resolving for
@@ -57,12 +64,6 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 			? 'product_variation'
 			: 'product';
 
-		add_filter(
-			'woocommerce_product_data_store_cpt_get_products_query',
-			array( &$this, 'product_query_filter' ),
-			10,
-			2
-		);
 		/**
 		 * Call the parent construct to setup class data
 		 */
@@ -70,37 +71,36 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 	}
 
 	/**
-	 * Applies price meta_query args to product query args
+	 * Return the name of the loader to be used with the connection resolver
 	 *
-	 * @param array $wp_query_args - Formatted query args.
-	 * @param array $query_vars    - Raw query args.
-	 *
-	 * @return array
+	 * @return string
 	 */
-	public function product_query_filter( $wp_query_args, $query_vars ) {
-		if ( empty( $query_vars['meta_query'] ) ) {
-			return $wp_query_args;
-		}
-
-		$price_meta_query = array_filter(
-			$query_vars['meta_query'],
-			function ( $query ) {
-				return ! empty( $query['key'] ) ? '_price' === $query['key'] : false;
-			}
-		);
-
-		if ( ! empty( $price_meta_query ) ) {
-			$wp_query_args['meta_query'] = array_merge( // WPCS: slow query ok.
-				$wp_query_args['meta_query'],
-				$price_meta_query
-			);
-		}
-
-		return $wp_query_args;
+	public function get_loader_name() {
+		return 'wc_post';
 	}
 
 	/**
-	 * Confirms the uses has the privileges to query Products
+	 * Given an ID, return the model for the entity or null
+	 *
+	 * @param integer $id  Node ID.
+	 *
+	 * @return Product|Product_Variation|null
+	 */
+	public function get_node_by_id( $id ) {
+		$post = get_post( $id );
+		if ( empty( $post ) || is_wp_error( $post ) ) {
+			return null;
+		}
+
+		if ( 'product_variation' === $post->post_type ) {
+			return new Product_Variation( $id );
+		}
+
+		return new Product( $id );
+	}
+
+	/**
+	 * Confirms the user has the privileges to query the products
 	 *
 	 * @return bool
 	 */
@@ -109,23 +109,9 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 	}
 
 	/**
-	 * Returns the attribute meta for the taxonomy provided
-	 *
-	 * @param string $taxonomy - The taxonomy name.
-	 *
-	 * @return string
-	 */
-	private function get_attribute_meta_key( $taxonomy ) {
-		return 'attribute_' . strtolower(
-			preg_replace( '/([A-Z])/', '_$1', $taxonomy )
-		);
-	}
-
-	/**
 	 * Creates query arguments array
 	 */
 	public function get_query_args() {
-		global $wpdb;
 
 		// Prepare for later use.
 		$last  = ! empty( $this->args['last'] ) ? $this->args['last'] : null;
@@ -135,7 +121,6 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 		$post_type_obj = get_post_type_object( $this->post_type );
 		$query_args    = array(
 			'post_type'           => $this->post_type,
-			'post_parent'         => 0,
 			'post_status'         => current_user_can( $post_type_obj->cap->edit_posts ) ? 'any' : 'publish',
 			'perm'                => 'readable',
 			'no_rows_found'       => true,
@@ -147,7 +132,7 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 		/**
 		 * Collect the input_fields and sanitize them to prepare them for sending to the WP_Query
 		 */
-		$input_fields = [];
+		$input_fields = array();
 		if ( ! empty( $this->args['where'] ) ) {
 			$input_fields = $this->sanitize_input_fields( $this->args['where'] );
 		}
@@ -170,82 +155,6 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 		$query_args['graphql_args'] = $this->args;
 
 		// Determine where we're at in the Graph and adjust the query context appropriately.
-		if ( true === is_object( $this->source ) ) {
-			switch ( true ) {
-				case is_a( $this->source, Coupon::class ):
-					if ( 'excludedProducts' === $this->info->fieldName ) {
-						$query_args['post__in'] = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->excluded_product_ids, $query_args['post__in'] )
-							: $this->source->excluded_product_ids;
-					} else {
-						$query_args['post__in'] = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->product_ids, $query_args['post__in'] )
-							: $this->source->product_ids;
-					}
-					break;
-
-				case is_a( $this->source, Customer::class ):
-					break;
-
-				case is_a( $this->source, Product::class ):
-					if ( 'related' === $this->info->fieldName ) {
-						$query_args['post__in'] = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->related_ids, $query_args['post__in'] )
-							: $this->source->related_ids;
-					} elseif ( 'upsell' === $this->info->fieldName ) {
-						$query_args['post__in'] = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->upsell_ids, $query_args['post__in'] )
-							: $this->source->upsell_ids;
-					} elseif ( 'crossSell' === $this->info->fieldName ) {
-						$query_args['post__in'] = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->cross_sell_ids, $query_args['post__in'] )
-							: $this->source->cross_sell_ids;
-					} elseif ( 'products' === $this->info->fieldName ) {
-						$query_args['post__in'] = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->grouped_ids, $query_args['post__in'] )
-							: $this->source->grouped_ids;
-					} elseif ( 'variations' === $this->info->fieldName ) {
-						$query_args['post_parent'] = $this->source->ID;
-						$query_args['post__in']    = isset( $query_args['post__in'] )
-							? array_intersect( $this->source->variation_ids, $query_args['post__in'] )
-							: $this->source->variation_ids;
-						$query_args['post_type']   = 'product_variation';
-					}
-					break;
-
-				case is_a( $this->source, Term::class ):
-					if ( 'variations' === $this->info->fieldName ) {
-						unset( $query_args['post_parent'] );
-						$query_args['post_type'] = 'product_variation';
-						$variation_ids           = $wpdb->get_col(
-							$wpdb->prepare(
-								"SELECT ID
-								FROM {$wpdb->prefix}posts
-								WHERE ID IN (SELECT post_id FROM {$wpdb->prefix}postmeta WHERE meta_key = %s AND meta_value = %s)
-								AND post_type = 'product_variation'",
-								$this->get_attribute_meta_key( $this->source->taxonomyName ),
-								$this->source->slug
-							)
-						);
-						if ( ! empty( $variation_ids ) ) {
-							$variation_ids          = array_map( 'absint', $variation_ids );
-							$query_args['post__in'] = isset( $query_args['post__in'] )
-								? array_intersect( $variation_ids, $query_args['post__in'] )
-								: $variation_ids;
-						}
-					} else {
-						if ( empty( $query_args['tax_query'] ) ) {
-							$query_args['tax_query'] = array(); // WPCS: slow query ok.
-						}
-						$query_args['tax_query'][] = array( // WPCS: slow query ok.
-							'taxonomy' => $this->source->taxonomyName,
-							'field'    => 'term_id',
-							'terms'    => $this->source->term_id,
-						);
-					}
-					break;
-			}
-		}
 
 		if ( isset( $query_args['post__in'] ) && empty( $query_args['post__in'] ) ) {
 			$query_args['post__in'] = array( '0' );
@@ -315,9 +224,17 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 	 * Executes query
 	 *
 	 * @return \WP_Query
+	 *
+	 * @throws InvariantViolation  Filter currently not supported for WP_Query.
 	 */
 	public function get_query() {
-		return new \WP_Query( $this->get_query_args() );
+		$query = new \WP_Query( $this->query_args );
+
+		if ( isset( $query->query_vars['suppress_filters'] ) && true === $query->query_vars['suppress_filters'] ) {
+			throw new InvariantViolation( __( 'WP_Query has been modified by a plugin or theme to suppress_filters, which will cause issues with WPGraphQL Execution. If you need to suppress filters for a specific reason within GraphQL, consider registering a custom field to the WPGraphQL Schema with a custom resolver.', 'wp-graphql-woocommerce' ) );
+		}
+
+		return $query;
 	}
 
 	/**
@@ -325,7 +242,7 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 	 *
 	 * @return array
 	 */
-	public function get_items() {
+	public function get_ids() {
 		return ! empty( $this->query->posts ) ? $this->query->posts : array();
 	}
 
@@ -360,8 +277,8 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 	public function sanitize_input_fields( array $where_args ) {
 		$args = $this->sanitize_common_inputs( $where_args );
 
-		if ( ! empty( $where_args['slug'] ) ) {
-			$args['name'] = $where_args['slug'];
+		if ( ! empty( $where_args['slugIn'] ) ) {
+			$args['post_name__in'] = $where_args['slugIn'];
 		}
 
 		if ( ! empty( $where_args['status'] ) ) {
@@ -453,11 +370,16 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 			}
 		}
 
-		if ( ! empty( $where_args['type'] ) ) {
-			$tax_query[] = array(
+		if ( empty( $where_args['type'] ) && empty( $where_args['typeIn'] ) && ! empty( $where_args['supportedTypesOnly'] )
+			&& true === $where_args['supportedTypesOnly'] ) {
+				$supported_types = array_keys( \WP_GraphQL_WooCommerce::get_enabled_product_types() );
+				$terms           = ! empty( $where_args['typeNotIn'] )
+					? array_diff( $supported_types, $where_args['typeNotIn'] )
+					: $supported_types;
+			$tax_query[]         = array(
 				'taxonomy' => 'product_type',
 				'field'    => 'slug',
-				'terms'    => $where_args['type'],
+				'terms'    => $terms,
 			);
 		}
 
@@ -581,6 +503,7 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 				: PHP_INT_MAX;
 
 			$meta_query[] = apply_filters(
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 				'woocommerce_get_min_max_price_meta_query',
 				array(
 					'key'     => '_price',
@@ -637,5 +560,16 @@ class Product_Connection_Resolver extends AbstractConnectionResolver {
 		);
 
 		return $args;
+	}
+
+	/**
+	 * Wrapper for "WC_Connection_Functions::is_valid_post_offset()"
+	 *
+	 * @param integer $offset Post ID.
+	 *
+	 * @return bool
+	 */
+	public function is_valid_offset( $offset ) {
+		return $this->is_valid_post_offset( $offset );
 	}
 }

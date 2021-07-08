@@ -4,25 +4,26 @@
  *
  * Registers Product interface.
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPInterface
  * @since   0.3.0
  */
 
 namespace WPGraphQL\WooCommerce\Type\WPInterface;
 
 use GraphQL\Error\UserError;
-use GraphQL\Type\Definition\ResolveInfo;
 use GraphQLRelay\Relay;
 use WPGraphQL\AppContext;
 use WPGraphQL\Data\DataSource;
 use WPGraphQL\WooCommerce\Data\Factory;
+use WP_GraphQL_WooCommerce;
 
 /**
  * Class - Product
  */
 class Product {
+
 	/**
-	 * Registers ProductUnion.
+	 * Registers the "Product" interface.
 	 *
 	 * @param \WPGraphQL\Registry\TypeRegistry $type_registry  Instance of the WPGraphQL TypeRegistry.
 	 */
@@ -33,11 +34,17 @@ class Product {
 				'description' => __( 'Product object', 'wp-graphql-woocommerce' ),
 				'fields'      => self::get_fields(),
 				'resolveType' => function( $value ) use ( &$type_registry ) {
-					$possible_types = \WP_GraphQL_WooCommerce::get_enabled_product_types();
+					$possible_types = WP_GraphQL_WooCommerce::get_enabled_product_types();
 					if ( isset( $possible_types[ $value->type ] ) ) {
 						return $type_registry->get_type( $possible_types[ $value->type ] );
 					}
-					return null;
+					throw new UserError(
+						sprintf(
+							/* translators: %s: Product type */
+							__( 'The "%s" product type is not supported by the core WPGraphQL WooCommerce (WooGraphQL) schema.', 'wp-graphql-woocommerce' ),
+							$value->type
+						)
+					);
 				},
 			)
 		);
@@ -49,87 +56,59 @@ class Product {
 				'type'        => 'Product',
 				'description' => __( 'A product object', 'wp-graphql-woocommerce' ),
 				'args'        => array(
-					'id' => array(
-						'type' => array( 'non_null' => 'ID' ),
+					'id'     => array(
+						'type'        => array( 'non_null' => 'ID' ),
+						'description' => __( 'The ID for identifying the product', 'wp-graphql-woocommerce' ),
+					),
+					'idType' => array(
+						'type'        => 'ProductIdTypeEnum',
+						'description' => __( 'Type of ID being used identify product', 'wp-graphql-woocommerce' ),
 					),
 				),
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					$id_components = Relay::fromGlobalId( $args['id'] );
-					if ( ! isset( $id_components['id'] ) || ! absint( $id_components['id'] ) ) {
-						throw new UserError( __( 'The ID input is invalid', 'wp-graphql-woocommerce' ) );
-					}
-					$product_id = absint( $id_components['id'] );
-					return Factory::resolve_crud_object( $product_id, $context );
-				},
-			)
-		);
+				'resolve'     => function ( $source, array $args, AppContext $context ) {
+					$id = isset( $args['id'] ) ? $args['id'] : null;
+					$id_type = isset( $args['idType'] ) ? $args['idType'] : 'global_id';
 
-		$post_by_args = array(
-			'id'        => array(
-				'type'        => 'ID',
-				'description' => __( 'Get the product by its global ID', 'wp-graphql-woocommerce' ),
-			),
-			'productId' => array(
-				'type'        => 'Int',
-				'description' => __( 'Get the product by its database ID', 'wp-graphql-woocommerce' ),
-			),
-			'slug'      => array(
-				'type'        => 'String',
-				'description' => __( 'Get the product by its slug', 'wp-graphql-woocommerce' ),
-			),
-			'sku'       => array(
-				'type'        => 'String',
-				'description' => __( 'Get the product by its sku', 'wp-graphql-woocommerce' ),
-			),
-		);
-
-		register_graphql_field(
-			'RootQuery',
-			'productBy',
-			array(
-				'type'        => 'Product',
-				'description' => __( 'A product object', 'wp-graphql-woocommerce' ),
-				'args'        => $post_by_args,
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					$product_id = 0;
-					$id_type = '';
-					if ( ! empty( $args['id'] ) ) {
-						$id_components = Relay::fromGlobalId( $args['id'] );
-						if ( empty( $id_components['id'] ) || empty( $id_components['type'] ) ) {
-							throw new UserError( __( 'The "id" is invalid', 'wp-graphql-woocommerce' ) );
-						}
-						$product_id = absint( $id_components['id'] );
-						$id_type = 'ID';
-					} elseif ( ! empty( $args['productId'] ) ) {
-						$product_id = absint( $args['productId'] );
-						$id_type = 'product ID';
-					} elseif ( ! empty( $args['slug'] ) ) {
-						$post       = get_page_by_path( $args['slug'], OBJECT, 'product' );
-						$product_id = ! empty( $post ) ? absint( $post->ID ) : 0;
-						$id_type = 'slug';
-					} elseif ( ! empty( $args['sku'] ) ) {
-						$product_id = \wc_get_product_id_by_sku( $args['sku'] );
-						$id_type = 'sku';
+					$product_id = null;
+					switch ( $id_type ) {
+						case 'sku':
+							$product_id = \wc_get_product_id_by_sku( $id );
+							break;
+						case 'slug':
+							$post       = get_page_by_path( $id, OBJECT, 'product' );
+							$product_id = ! empty( $post ) ? absint( $post->ID ) : 0;
+							break;
+						case 'database_id':
+							$product_id = absint( $id );
+							break;
+						case 'global_id':
+						default:
+							$id_components = Relay::fromGlobalId( $id );
+							if ( empty( $id_components['id'] ) || empty( $id_components['type'] ) ) {
+								throw new UserError( __( 'The "global ID" is invalid', 'wp-graphql-woocommerce' ) );
+							}
+							$product_id = absint( $id_components['id'] );
+							break;
 					}
 
 					if ( empty( $product_id ) ) {
 						/* translators: %1$s: ID type, %2$s: ID value */
-						throw new UserError( sprintf( __( 'No product ID was found corresponding to the %1$s: %2$s' ), $id_type, $product_id ) );
+						throw new UserError( sprintf( __( 'No product ID was found corresponding to the %1$s: %2$s', 'wp-graphql-woocommerce' ), $id_type, $id ) );
 					} elseif ( get_post( $product_id )->post_type !== 'product' ) {
 						/* translators: %1$s: ID type, %2$s: ID value */
-						throw new UserError( sprintf( __( 'No product exists with the %1$s: %2$s' ), $id_type, $product_id ) );
+						throw new UserError( sprintf( __( 'No product exists with the %1$s: %2$s', 'wp-graphql-woocommerce' ), $id_type, $id ) );
 					}
 
-					$product = Factory::resolve_crud_object( $product_id, $context );
-
-					return $product;
+					return Factory::resolve_crud_object( $product_id, $context );
 				},
 			)
 		);
 	}
 
 	/**
-	 * Defines product fields. All child type must have these fields as well.
+	 * Defines Product fields. All child type must have these fields as well.
+	 *
+	 * @return array
 	 */
 	public static function get_fields() {
 		return array(
@@ -137,9 +116,9 @@ class Product {
 				'type'        => array( 'non_null' => 'ID' ),
 				'description' => __( 'The globally unique identifier for the product', 'wp-graphql-woocommerce' ),
 			),
-			'productId'         => array(
-				'type'        => 'Int',
-				'description' => __( 'The Id of the order. Equivalent to WP_Post->ID', 'wp-graphql-woocommerce' ),
+			'databaseId'        => array(
+				'type'        => array( 'non_null' => 'Int' ),
+				'description' => __( 'The ID of the product in the database', 'wp-graphql-woocommerce' ),
 			),
 			'slug'              => array(
 				'type'        => 'String',
@@ -269,6 +248,14 @@ class Product {
 			'purchasable'       => array(
 				'type'        => 'Boolean',
 				'description' => __( 'Can product be purchased?', 'wp-graphql-woocommerce' ),
+			),
+			'link'              => array(
+				'type'        => 'String',
+				'description' => __( 'The permalink of the post', 'wp-graphql-woocommerce' ),
+				'resolve'     => function( $source ) {
+					$permalink = get_post_permalink( $source->ID );
+					return ! empty( $permalink ) ? $permalink : null;
+				},
 			),
 		);
 	}

@@ -14,12 +14,18 @@ use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
 use WPGraphQL\Data\Connection\AbstractConnectionResolver;
 use WPGraphQL\WooCommerce\Model\Customer;
+use WPGraphQL\WooCommerce\Model\Order;
 
 /**
  * Class Order_Connection_Resolver
+ *
+ * @deprecated v0.10.0
  */
 class Order_Connection_Resolver extends AbstractConnectionResolver {
-	use Common_CPT_Input_Sanitize_Functions;
+	/**
+	 * Include CPT Loader connection common functions.
+	 */
+	use WC_CPT_Loader_Common;
 
 	/**
 	 * The name of the post type, or array of post types the connection resolver is resolving for
@@ -41,6 +47,7 @@ class Order_Connection_Resolver extends AbstractConnectionResolver {
 		 * Set the post type for the resolver
 		 */
 		$this->post_type = 'shop_order';
+
 		/**
 		 * Call the parent construct to setup class data
 		 */
@@ -48,19 +55,39 @@ class Order_Connection_Resolver extends AbstractConnectionResolver {
 	}
 
 	/**
-	 * Confirms the uses has the privileges to query Orders
+	 * Return the name of the loader to be used with the connection resolver
+	 *
+	 * @return string
+	 */
+	public function get_loader_name() {
+		return 'wc_post';
+	}
+
+	/**
+	 * Given an ID, return the model for the entity or null
+	 *
+	 * @param integer $id  Node ID.
+	 *
+	 * @return mixed|Order|null
+	 */
+	public function get_node_by_id( $id ) {
+		return $this->get_cpt_model_by_id( $id );
+	}
+
+	/**
+	 * Checks if user is authorized to query orders
 	 *
 	 * @return bool
 	 */
 	public function should_execute() {
-		$post_type_obj = get_post_type_object( 'shop_order' );
-		switch ( true ) {
-			case current_user_can( $post_type_obj->cap->edit_posts ):
-			case is_a( $this->source, Customer::class ) && 'orders' === $this->info->fieldName:
-				return true;
-			default:
-				return false;
+		$post_type_obj = get_post_type_object( $this->post_type );
+		if ( current_user_can( $post_type_obj->cap->edit_posts ) ) {
+			return true;
+		} elseif ( isset( $this->query_args['customer_id'] ) ) {
+			return get_current_user_id() === $this->query_args['customer_id'];
 		}
+
+		return false;
 	}
 
 	/**
@@ -111,23 +138,6 @@ class Order_Connection_Resolver extends AbstractConnectionResolver {
 			$query_args = array_merge( $query_args, $input_fields );
 		}
 
-		if ( true === is_object( $this->source ) ) {
-			switch ( true ) {
-				case is_a( $this->source, Customer::class ):
-					if ( 'orders' === $this->info->fieldName ) {
-						if ( ! empty( $args['meta_query'] ) ) {
-							$args['meta_query'] = array(); // WPCS: slow query ok.
-						}
-						$args['meta_query'][] = array(
-							'key'   => '_customer_user',
-							'value' => $this->source->ID,
-							'type'  => 'NUMERIC',
-						);
-					}
-					break;
-			}
-		}
-
 		/**
 		 * If there's no orderby params in the inputArgs, set order based on the first/last argument
 		 */
@@ -153,9 +163,17 @@ class Order_Connection_Resolver extends AbstractConnectionResolver {
 	 * Executes query
 	 *
 	 * @return \WC_Order_Query
+	 *
+	 * @throws InvariantViolation  Filter currently not supported for WC_Order_Query.
 	 */
 	public function get_query() {
-		return new \WC_Order_Query( $this->get_query_args() );
+		$query = new \WC_Order_Query( $this->query_args );
+
+		if ( true === $query->get( 'suppress_filters', false ) ) {
+			throw new InvariantViolation( __( 'WC_Order_Query has been modified by a plugin or theme to suppress_filters, which will cause issues with WPGraphQL Execution. If you need to suppress filters for a specific reason within GraphQL, consider registering a custom field to the WPGraphQL Schema with a custom resolver.', 'wp-graphql-woocommerce' ) );
+		}
+
+		return $query;
 	}
 
 	/**
@@ -163,7 +181,7 @@ class Order_Connection_Resolver extends AbstractConnectionResolver {
 	 *
 	 * @return array
 	 */
-	public function get_items() {
+	public function get_ids() {
 		return ! empty( $this->query->get_orders() ) ? $this->query->get_orders() : array();
 	}
 
@@ -278,5 +296,16 @@ class Order_Connection_Resolver extends AbstractConnectionResolver {
 		);
 
 		return $args;
+	}
+
+	/**
+	 * Wrapper for "WC_Connection_Functions::is_valid_post_offset()"
+	 *
+	 * @param integer $offset Post ID.
+	 *
+	 * @return bool
+	 */
+	public function is_valid_offset( $offset ) {
+		return $this->is_valid_post_offset( $offset );
 	}
 }

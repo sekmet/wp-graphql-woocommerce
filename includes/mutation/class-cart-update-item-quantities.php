@@ -14,11 +14,13 @@ use GraphQL\Error\UserError;
 use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
 use WPGraphQL\WooCommerce\Data\Mutation\Cart_Mutation;
+use Exception;
 
 /**
  * Class - Cart_Update_Item_Quantities
  */
 class Cart_Update_Item_Quantities {
+
 	/**
 	 * Registers mutation
 	 */
@@ -82,6 +84,7 @@ class Cart_Update_Item_Quantities {
 					return array_merge( $updated, $payload['removed'] );
 				},
 			),
+			'cart'    => Cart_Mutation::get_cart_field( true ),
 		);
 	}
 
@@ -92,6 +95,8 @@ class Cart_Update_Item_Quantities {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
+			Cart_Mutation::check_session_token();
+
 			// Confirm "items" exists.
 			if ( empty( $input['items'] ) ) {
 				throw new UserError( __( 'No item data provided', 'wp-graphql-woocommerce' ) );
@@ -102,7 +107,7 @@ class Cart_Update_Item_Quantities {
 				throw new UserError( __( 'Provided "items" invalid', 'wp-graphql-woocommerce' ) );
 			}
 
-			do_action( 'woocommerce_graphql_before_set_item_quantities', $input['items'], $input, $context, $info );
+			do_action( 'graphql_woocommerce_before_set_item_quantities', $input['items'], $input, $context, $info );
 
 			// Update quantities. If quantity set to 0, the items in removed.
 			$removed       = array();
@@ -115,14 +120,14 @@ class Cart_Update_Item_Quantities {
 					if ( 0 === $quantity ) {
 						$removed_item    = \WC()->cart->get_cart_item( $key );
 						$removed_items[] = $removed_item;
-						do_action( 'woocommerce_graphql_before_remove_item', $removed_item, 'update_quantity', $input, $context, $info );
+						do_action( 'graphql_woocommerce_before_remove_item', $removed_item, 'update_quantity', $input, $context, $info );
 						$removed[ $key ] = \WC()->cart->remove_cart_item( $key );
-						do_action( 'woocommerce_graphql_after_remove_item', $removed_item, 'update_quantity', $input, $context, $info );
+						do_action( 'graphql_woocommerce_after_remove_item', $removed_item, 'update_quantity', $input, $context, $info );
 						continue;
 					}
-					do_action( 'woocommerce_graphql_before_set_item_quantity', \WC()->cart->get_cart_item( $key ), $input, $context, $info );
+					do_action( 'graphql_woocommerce_before_set_item_quantity', \WC()->cart->get_cart_item( $key ), $input, $context, $info );
 					$updated[ $key ] = \WC()->cart->set_quantity( $key, $quantity, true );
-					do_action( 'woocommerce_graphql_after_set_item_quantity', \WC()->cart->get_cart_item( $key ), $input, $context, $info );
+					do_action( 'graphql_woocommerce_after_set_item_quantity', \WC()->cart->get_cart_item( $key ), $input, $context, $info );
 				}
 			}
 
@@ -137,7 +142,7 @@ class Cart_Update_Item_Quantities {
 					)
 				);
 				if ( 0 < count( $errors ) ) {
-					throw new \Exception(
+					throw new Exception(
 						sprintf(
 							/* translators: %s: Cart item keys */
 							__( 'Cart items identified with keys %s failed to update', 'wp-graphql-woocommerce' ),
@@ -145,12 +150,12 @@ class Cart_Update_Item_Quantities {
 						)
 					);
 				}
-			} catch ( \Exception $e ) {
+			} catch ( Exception $e ) {
 				throw new UserError( $e->getMessage() );
 			}
 
 			do_action(
-				'woocommerce_graphql_before_set_item_quantities',
+				'graphql_woocommerce_before_set_item_quantities',
 				array_keys( $updated ),
 				array_keys( $removed ),
 				$input,

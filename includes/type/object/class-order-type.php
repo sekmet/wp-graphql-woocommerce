@@ -4,24 +4,22 @@
  *
  * Registers Order WPObject type and queries
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPObject
  * @since   0.0.1
  */
 
 namespace WPGraphQL\WooCommerce\Type\WPObject;
 
 use GraphQL\Error\UserError;
-use GraphQL\Type\Definition\ResolveInfo;
 use GraphQLRelay\Relay;
 use WPGraphQL\AppContext;
-use WPGraphQL\Type\WPObjectType;
 use WPGraphQL\WooCommerce\Data\Factory;
-use WPGraphQL\WooCommerce\Model\Order;
 
 /**
  * Class Order_Type
  */
 class Order_Type {
+
 	/**
 	 * Register Order type and queries to the WPGraphQL schema
 	 */
@@ -30,15 +28,18 @@ class Order_Type {
 			'Order',
 			array(
 				'description' => __( 'A order object', 'wp-graphql-woocommerce' ),
-				'interfaces'  => array( 'Node' ),
+				'interfaces'  => array(
+					'Node',
+					'NodeWithComments',
+				),
 				'fields'      => array(
 					'id'                    => array(
 						'type'        => array( 'non_null' => 'ID' ),
 						'description' => __( 'The globally unique identifier for the order', 'wp-graphql-woocommerce' ),
 					),
-					'orderId'               => array(
+					'databaseId'            => array(
 						'type'        => 'Int',
-						'description' => __( 'The Id of the order. Equivalent to WP_Post->ID', 'wp-graphql-woocommerce' ),
+						'description' => __( 'The ID of the order in the database', 'wp-graphql-woocommerce' ),
 					),
 					'orderKey'              => array(
 						'type'        => 'String',
@@ -139,10 +140,10 @@ class Order_Type {
 							if ( isset( $args['format'] ) && 'raw' === $args['format'] ) {
 								// @codingStandardsIgnoreLine.
 								return $source->shippingTotalRaw;
-							} else {
-								// @codingStandardsIgnoreLine.
-								return $source->shippingTotal;
 							}
+
+							// @codingStandardsIgnoreLine.
+							return $source->shippingTotal;
 						},
 					),
 					'shippingTax'           => array(
@@ -158,10 +159,10 @@ class Order_Type {
 							if ( isset( $args['format'] ) && 'raw' === $args['format'] ) {
 								// @codingStandardsIgnoreLine.
 								return $source->shippingTaxRaw;
-							} else {
-								// @codingStandardsIgnoreLine.
-								return $source->shippingTax;
 							}
+
+							// @codingStandardsIgnoreLine.
+							return $source->shippingTax;
 						},
 					),
 					'cartTax'               => array(
@@ -278,13 +279,18 @@ class Order_Type {
 						'type'        => 'Order',
 						'description' => __( 'Parent order', 'wp-graphql-woocommerce' ),
 						'resolve'     => function( $order, array $args, AppContext $context ) {
-							return Factory::resolve_crud_object( $order->parent, $context );
+							return Factory::resolve_crud_object( $order->parent_id, $context );
 						},
 					),
 					'customer'              => array(
 						'type'        => 'Customer',
 						'description' => __( 'Order customer', 'wp-graphql-woocommerce' ),
 						'resolve'     => function( $order, array $args, AppContext $context ) {
+							if ( empty( $order->customer_id ) ) {
+								// Guest orders don't have an attached customer.
+								return null;
+							}
+
 							return Factory::resolve_customer( $order->customer_id, $context );
 						},
 					),
@@ -316,82 +322,7 @@ class Order_Type {
 						'type'        => 'Boolean',
 						'description' => __( 'If order needs processing before it can be completed', 'wp-graphql-woocommerce' ),
 					),
-					'downloadableItems'     => array(
-						'type'        => array( 'list_of' => 'ProductDownload' ),
-						'description' => __( 'Product downloads', 'wp-graphql-woocommerce' ),
-					),
 				),
-			)
-		);
-
-		register_graphql_field(
-			'RootQuery',
-			'order',
-			array(
-				'type'        => 'Order',
-				'description' => __( 'A order object', 'wp-graphql-woocommerce' ),
-				'args'        => array(
-					'id' => array(
-						'type' => array(
-							'non_null' => 'ID',
-						),
-					),
-				),
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					$id_components = Relay::fromGlobalId( $args['id'] );
-					if ( ! isset( $id_components['id'] ) || ! absint( $id_components['id'] ) ) {
-						throw new UserError( __( 'The ID input is invalid', 'wp-graphql-woocommerce' ) );
-					}
-					$order_id = absint( $id_components['id'] );
-					return Factory::resolve_crud_object( $order_id, $context );
-				},
-			)
-		);
-
-		$post_by_args = array(
-			'id'       => array(
-				'type'        => 'ID',
-				'description' => __( 'Get the order by its global ID', 'wp-graphql-woocommerce' ),
-			),
-			'orderId'  => array(
-				'type'        => 'Int',
-				'description' => __( 'Get the order by its database ID', 'wp-graphql-woocommerce' ),
-			),
-			'orderKey' => array(
-				'type'        => 'String',
-				'description' => __( 'Get the order by its order number', 'wp-graphql-woocommerce' ),
-			),
-		);
-
-		register_graphql_field(
-			'RootQuery',
-			'orderBy',
-			array(
-				'type'        => 'Order',
-				'description' => __( 'A order object', 'wp-graphql-woocommerce' ),
-				'args'        => $post_by_args,
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					$order_id = 0;
-					if ( ! empty( $args['id'] ) ) {
-						$id_components = Relay::fromGlobalId( $args['id'] );
-						if ( empty( $id_components['id'] ) || empty( $id_components['type'] ) ) {
-							throw new UserError( __( 'The "id" is invalid', 'wp-graphql-woocommerce' ) );
-						}
-						$order_id = absint( $id_components['id'] );
-					} elseif ( ! empty( $args['orderId'] ) ) {
-						$order_id = absint( $args['orderId'] );
-					} elseif ( ! empty( $args['orderKey'] ) ) {
-						$order_id = \wc_get_order_id_by_order_key( $args['orderKey'] );
-					}
-
-					$order = Factory::resolve_crud_object( $order_id, $context );
-					if ( get_post( $order_id )->post_type !== 'shop_order' ) {
-						/* translators: not order found error message */
-						throw new UserError( sprintf( __( 'No order exists with this id: %1$s' ), $order_id ) );
-					}
-
-					return $order;
-				},
 			)
 		);
 	}

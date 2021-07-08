@@ -19,6 +19,7 @@ use WPGraphQL\WooCommerce\Data\Mutation\Cart_Mutation;
  * Class - Cart_Add_Fee
  */
 class Cart_Add_Fee {
+
 	/**
 	 * Registers mutation
 	 */
@@ -75,6 +76,7 @@ class Cart_Add_Fee {
 					return $fees[ $payload['id'] ];
 				},
 			),
+			'cart'    => Cart_Mutation::get_cart_field( true ),
 		);
 	}
 
@@ -85,15 +87,18 @@ class Cart_Add_Fee {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
+			Cart_Mutation::check_session_token();
+
 			if ( ! current_user_can( 'edit_shop_orders' ) ) {
-				throw new UserError( __( 'You do not have the appropriate capabilities to perform this action', 'wp-graphql' ) );
+				throw new UserError( __( 'You do not have the appropriate capabilities to perform this action.', 'wp-graphql-woocommerce' ) );
 			}
 
 			if ( empty( $input['name'] ) ) {
-				throw new UserError( __( 'No name provided for fee', 'wp-graphql-woocommerce' ) );
+				throw new UserError( __( 'No name provided for fee.', 'wp-graphql-woocommerce' ) );
 			}
+
 			if ( ! isset( $input['amount'] ) ) {
-				throw new UserError( __( 'No amount set for the fee', 'wp-graphql-woocommerce' ) );
+				throw new UserError( __( 'No amount set for the fee.', 'wp-graphql-woocommerce' ) );
 			}
 
 			// Get cart fee args.

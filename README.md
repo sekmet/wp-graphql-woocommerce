@@ -1,123 +1,101 @@
-<img src="./logo.svg" width="250px">
+<img src="./logo.svg" width="250px" />
 
 # WPGraphQL WooCommerce (WooGraphQL)
-[![Build Status](https://travis-ci.org/wp-graphql/wp-graphql-woocommerce.svg?branch=develop)](https://travis-ci.org/wp-graphql/wp-graphql-woocommerce) [![Coverage Status](https://coveralls.io/repos/github/wp-graphql/wp-graphql-woocommerce/badge.svg?branch=develop)](https://coveralls.io/github/wp-graphql/wp-graphql-woocommerce?branch=develop)
+
+<a href="https://woographql.com/" target="_blank">Docs</a> • <a href="https://www.axistaylor.com" target="_blank">AxisTaylor</a> • <a href="https://join.slack.com/t/wp-graphql/shared_invite/zt-3vloo60z-PpJV2PFIwEathWDOxCTTLA" target="_blank">Join Slack</a>
+
+[![Automated-Testing](https://github.com/wp-graphql/wp-graphql-woocommerce/workflows/Automated-Testing/badge.svg?branch=develop)](https://github.com/wp-graphql/wp-graphql-woocommerce/actions?query=workflow%3A%22Automated-Testing%22) [![Coding-Standards](https://github.com/wp-graphql/wp-graphql-woocommerce/workflows/Coding-Standards/badge.svg?branch=develop)](https://github.com/wp-graphql/wp-graphql-woocommerce/actions?query=workflow%3A%22Coding-Standards%22) [![Coverage Status](https://coveralls.io/repos/github/wp-graphql/wp-graphql-woocommerce/badge.svg?branch=develop)](https://coveralls.io/github/wp-graphql/wp-graphql-woocommerce?branch=develop) [![Financial Contributors on Open Collective](https://opencollective.com/woographql/all/badge.svg?label=financial+contributors)](https://opencollective.com/woographql)
 
 ## Quick Install
+
 1. Install & activate [WooCommerce](https://woocommerce.com/)
 2. Install & activate [WPGraphQL](https://www.wpgraphql.com/)
-3. (Optional) Install & activate [WPGraphQL-JWT-Authentication](https://github.com/wp-graphql/wp-graphql-jwt-authentication) to add a `login` mutation that returns a JSON Web Token.
-4. Clone or download the zip of this repository into your WordPress plugin directory & activate the **WP GraphQL WooCommerce** plugin
+3. Clone or download the zip of this repository into your WordPress plugin directory & activate the **WP GraphQL WooCommerce** plugin.
+4. (Optional) Install & activate [WPGraphQL-JWT-Authentication](https://github.com/wp-graphql/wp-graphql-jwt-authentication) to add a `login` mutation that returns a JSON Web Token.
+5. (Optional) Install & activate [WPGraphQL-CORS](https://github.com/funkhaus/wp-graphql-cors) to add an extra layer of security using HTTP CORS and some of WPGraphQL advanced functionality.
 
-## What does this plugin do?
-It adds WooCommerce functionality to the WPGraphQL schema using WooCommerce's [CRUD](https://github.com/woocommerce/woocommerce/wiki/CRUD-Objects-in-3.0) objects.
+## What can you do with this extension?
 
-## Features
-- Query product, customers, coupons, order, refund, product variations with complex filtering options.
-- Add items to cart and process user store session using HTTP header defined by WooGraphQL's built-in session handler
-- Create/process user checkout with the `checkout` mutation.
+- Query your shops products and variations with complex filtering options.
+- Query customers, orders, coupons, and refunds (*).
+- Manage a customer's session with JWTs and cart/customer queries and mutations(*).
+- Create orders manually (*), automatically with the checkout mutation, or pass a customer's session to the WooCommerce checkout page in your theme for complete payment gateway support (#).
+
+(*) These operations have user restrictions. Please read up on authenticating an user with [here](https://www.wpgraphql.com/docs/authentication-and-authorization/), then view [this React/Apollo example](https://github.com/wp-graphql/wp-graphql-woocommerce/pull/88) with the added on usage of customer session Token.
+
+(#) This is the recommended method on checkout. You can read it's usage in [this](https://jacobarriola.com/post/hosted-woocommerce-checkout-headless-application#load-the-session-in-woocommerce) excellent write-up by @jacobarriola
+
+## Why don't the WooCommerce CPT GraphQL types support all the same features as most WordPress CPTs that WPGraphQL exposes?
+
+The CPTs as well as most of the data objects that WooCommerce defines are wrapped in a object managers distributed by a data store system.
+
+This data store system allows for each individual data object to be defined however needed. What this means is, although by out of the box objects like **products**, **orders**, and **coupons** are defined as WordPress CPTs they don't have to be.
+
+This is what also enables WooCommerce to store most meta connected to these CPTs in separate tables. The object data doesn't even have to be in the same database if the object's data store designed to manage somewhere else, but we are getting out of the scope of this question.
+
+What does all this :point_up: have to do with WooCommerce's CPTs' functionality? Well, the object managers distributed by the data store are WooGraphQL first point of contact for pretty much everything. Unlike the most common CPTs which use a **WP_Post** object as their data source and a **WPGraphQL\Model\Post** object as their model, WooGraphQL uses object managers as the data source for the CPTs and each individual has it's own model with it's own set of permissions and restrictions.
+
+This has led to some friction is certain areas of the schema where WooGraphQL support is lacking. I'm sorry for the inconvience, myself and whole **WPGraphQL** org are working to reduce this friction and WooGraphQL properly integrated with all **WPGraphQL** + **WPGraphQL ACF** features.
+
+Thank you for your patience
+@kidunot89
 
 ## Future Features
-- Adminstrator mutations. Eg. Creating and deleting products, coupons, and refunds.
+
+- Product CRUD mutations.
+- And some other stuff I'm sure :thinking_face:
 
 ## Playground
-Feel free to test out the extension using the [playground](https://docs.wpgraphql.com/extensions/wpgraphql-woocommerce/). The playground allows you to execute queries and mutations, as well as view the schema.
 
-## Unit Tests 
-Until the documentation is in full effect, it's recommended that a [GraphiQL](https://github.com/graphql/graphiql)-based tool like [WPGraphiQL](https://github.com/wp-graphql/wp-graphiql) be used to view the GraphQL schema, an alternative to this is viewing the unit tests located in `tests/wpunit` directory. Which are constantly updated along with the project. If you're interested in contributing when I begin accepting contribution or simply want to run the tests. Follow the instruction below.
+Feel free to test out the extension using this [GraphiQL Playground](https://woographql.com/playground). The playground allows you to execute queries and mutations, as well as view the schema (*).
 
-### Prerequisties
-- Shell/CMD access
-- [Composer](https://getcomposer.org/)
-- [WP-CLI](https://wp-cli.org/)
+(*) I have a tendency to forget to update the playground between releases :sweat_smile:, so if you believe this to be the case look me up somewhere on this page and lemme know :man_shrugging:
 
-### Setup
-1. Make sure all dependencies are install by running `composer install` from the CMD/Terminal in the project directory.
-2. Next the copy 2 distributed files with the `.dist` in there filenames. For instance `.env.dist` becomes `.env` and `wpunit.suite.dist.yml` becomes `wpunit.suite.yml`. The distributed files and what their copied names should are as follows.
-    - `codeception.dist.yml` => `codeception.yml`
-    - `.env.dist` => `.env`
-3. Next open `.env` and alter to make you usage.
-	```
-	# docker ENV variables
-	DB_NAME=wordpress
-	DB_HOST=app_db
-	DB_USER=wordpress
-	DB_PASSWORD=wordpress
-	WP_TABLE_PREFIX=wp_
-	WP_URL=http://localhost
-	WP_DOMAIN=localhost
-	ADMIN_EMAIL=admin@example.com
-	ADMIN_USERNAME=admin
-	ADMIN_PASSWORD=password
-	ADMIN_PATH=/wp-admin
+## Wanna help support WooGraphQL's future
 
-	# local codeception/install-wp-tests ENV variables
-	TEST_DB_NAME=woographql_tests
-	TEST_DB_HOST=127.0.0.1
-	TEST_DB_USER=wordpress
-	TEST_DB_PASSWORD=wordpress
-	TEST_WP_TABLE_PREFIX=wp_
+- Sponsor **@kidunot89** *(WooGraphQL Creator/Developer)* on **[Github](https://github.com/sponsors/kidunot89)**
+- Sponsor **WooGraphQL** on **[OpenCollective](https://opencollective.com/woographql)**
+- Sponsor **WPGraphQL** on **[OpenCollective](http://opencollective.com/wp-graphql)**
+- Sponsor **GraphQL-PHP** on **[OpenCollective](https://opencollective.com/webonyx-graphql-php)**
+- Or **[Contribute](./CONTRIBUTING.md)**
 
-	# install-wp-tests ENV variables
-	SKIP_DB_CREATE=false
-	TEST_WP_ROOT_FOLDER=/tmp/wordpress
-	TEST_ADMIN_EMAIL=admin@wp.test
+## Follow [![alt text](http://i.imgur.com/tXSoThF.png)](https://twitter.com/woographql)[![alt text](http://i.imgur.com/P3YfQoD.png)](https://www.facebook.com/woographql)
 
-	# codeception ENV variables
-	TESTS_DIR=tests
-	TESTS_OUTPUT=tests/_output
-	TESTS_DATA=tests/_data
-	TESTS_SUPPORT=tests/_support
-	TESTS_ENVS=tests/_envs
-	```
-	- `docker ENV variables`: variables defined for use in the Docker/Docker-Compose setups. These are also used in `codeception.dist.yml` for testing within a Docker container. It's recommend that this file be left unchanged and a `codeception.yml` be created for local codeception unit testing.
-	- `local codeception/install-wp-tests ENV variables`: variable defined for use with codeception testing w/o docker and the `install-wp-tests` script in the `bin` directory. As mentioned above a `codeception.yml` should be created from `codeception.dist.yml` and the variables in the `WPLoader` config should be set accordingly.
-	- `install-wp-tests ENV variables`: variables specific to the `install-wp-tests` script. The script can be run using `composer install-wp-tests` in the terminal from project directory.
-	- `codeception ENV variables`: variables used by codeception. This includes within the docker container as well.
+## Demo/Examples
 
-4. Once you have finish modifying the `.env` file. Run `composer install-wp-tests` from the project directory.
-5. Upon success you can begin running the tests.
+- Examples with Next.js
+  - [Next.js WooCommerce Theme](https://github.com/imranhsayed/woo-next) [[source]](https://github.com/imranhsayed/woo-next) [[demo video]](https://youtu.be/EGjY3X868YQ)
+- Examples with Gatsby
+  - [Gatsby WooCommerce Theme](https://gatsby-woocommerce-theme.netlify.app/) [[source]](https://github.com/imranhsayed/gatsby-woocommerce-themes) [[demo video]](https://youtu.be/ygaE8ZdPEX8)
 
-### Running tests
-To run test use the command `vendor/bin/codecept run [suite [test [:test-function]]]`.
-If you use the command with at least a `suite` specified, **Codeception** will run all tests, however this is not recommended. Running a suite `vendor/bin/codecept run wpunit` or a test `vendor/bin/codecept run CouponQueriesTest` is recommended. Running a single `test-function` like `vendor/bin/codecept run ProductQueriesTest:testProductsQueryAndWhereArgs` is also possible.
+## Who using WooGraphQL
 
-To learn more about the usage of Codeception with WordPress view the [Documentation](https://codeception.com/for/wordpress)  
+## Contributors
 
-## Functional and Acceptance Tests (Docker/Docker-Compose required)
-It's possible to run functional and acceptance tests, but is very limited at the moment. The script docker entrypoint script runs all three suites (acceptance, functional, and wpunit) at once. This will change eventually, however as of right now, this is the limitation.
+### Code Contributors
 
-### Running tests
-Even though the two suite use a Docker environment to run, the docker environment relies on a few environmental variables defined in `.env.dist` and a volume source provided by the test install script and the configuration `codeception.dist.yml`. If you have created a `codeception.yml` file ensure it is identical to `codeception.dist.yml` or delete it.
-Run the following in the terminal to run all three suites. Isolating specific suites should be simple to figure out.
-```
-docker-compose run --rm -e SUITE=acceptance;wpunit;functional -e DEBUG=1 -e COVERAGE=1 testing --scale app=0
-```
-- The `COVERAGE`, and `DEBUG` vars are optional flags for toggle codecoverage and debug output.
-- `--scale app=0` ensures that the service running a local app doesn't create any instances. It must be added or a collision with `mysql` will occur. More on this service in the next section
+This project exists thanks to all the people who contribute. [[Contribute](CONTRIBUTING.md)].
+<a href="https://github.com/wp-graphql/wp-graphql-woocommerce/graphs/contributors"><img src="https://opencollective.com/woographql/contributors.svg?width=890&button=false" /></a>
 
-## Using docker-compose to run a local installation for live testing.
-This is rather simple just like with testing using docker ensure that `env.dist` and `codeception.dist.yml` are untouched.
-1. Run `docker-compose up --scale testing=0 app`
-2. wait for `app_1      | Success: Exported to '/var/www/html/wp-content/plugins/wp-graphql-woocommerce/tests/_data/dump.sql'.` to print to the terminal.
-3. navigate to `http://localhost:8091`. And that's it.
-You can view the configuration for the installation in the `docker-compose.yml`.
-**NOTE: if you get redirected to `http://localhost` run `docker-compose down` to remove any existing containers related to the project, then re-run Step 1.**
-- For more information about the docker-image uses in the service, it's on [Docker Hub](https://hub.docker.com/r/kidunot89/woographql-app). 
+### Financial Contributors
 
+Become a financial contributor and help us sustain our community. [[Contribute](https://opencollective.com/woographql/contribute)]
 
-## HTTP Error 500 :construction: 
-If you get HTTP 500 error upon activation or accessing the `endpoint` and have **CMD/Terminal** access with **Composer** installed. 
-- Try deleting the `vendor` directory `rm -rf vendor` and regenerating the autoloading files `composer dumpautoload -o` in the `wp-graphql-woocommerce` directory in your WordPress installation's `plugins` directory.
-- (Alternative) You can also try delete and cloning the repository again. The latest release should have fixed the issue.
+#### Individuals
 
-## Support this extension
-**@kidunot89** *(WooGraphQL Creator/Developer)* :point_right: **[Github Sponsors](https://github.com/sponsors/kidunot89)**
+<a href="https://opencollective.com/woographql"><img src="https://opencollective.com/woographql/individuals.svg?width=890"></a>
 
-**WPGraphQL** :point_right: **[OpenCollective](http://opencollective.com/wp-graphql)**
+#### Organizations
 
-**GraphQL-PHP** :point_right: **[OpenCollective](https://opencollective.com/webonyx-graphql-php)**
+Support this project with your organization. Your logo will show up here with a link to your website. [[Contribute](https://opencollective.com/woographql/contribute)]
 
-## Follow
-[![alt text](http://i.imgur.com/tXSoThF.png)](https://twitter.com/woographql)
-[![alt text](http://i.imgur.com/P3YfQoD.png)](https://www.facebook.com/woographql)
+<a href="https://opencollective.com/woographql/organization/0/website"><img src="https://opencollective.com/woographql/organization/0/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/1/website"><img src="https://opencollective.com/woographql/organization/1/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/2/website"><img src="https://opencollective.com/woographql/organization/2/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/3/website"><img src="https://opencollective.com/woographql/organization/3/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/4/website"><img src="https://opencollective.com/woographql/organization/4/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/5/website"><img src="https://opencollective.com/woographql/organization/5/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/6/website"><img src="https://opencollective.com/woographql/organization/6/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/7/website"><img src="https://opencollective.com/woographql/organization/7/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/8/website"><img src="https://opencollective.com/woographql/organization/8/avatar.svg"></a>
+<a href="https://opencollective.com/woographql/organization/9/website"><img src="https://opencollective.com/woographql/organization/9/avatar.svg"></a>

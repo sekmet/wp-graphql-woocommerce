@@ -4,27 +4,23 @@
  *
  * Registers WPObject type for WooCommerce customers
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPObject
  * @since   0.0.1
  */
 
 namespace WPGraphQL\WooCommerce\Type\WPObject;
 
 use GraphQL\Error\UserError;
-use GraphQL\Type\Definition\ResolveInfo;
-use GraphQLRelay\Relay;
 use WPGraphQL\AppContext;
-use WPGraphQL\Type\WPObjectType;
 use WPGraphQL\WooCommerce\Data\Factory;
-use WPGraphQL\WooCommerce\Model\Customer;
-use WPGraphQL\Model\User;
 
 /**
  * Class Customer_Type
  */
 class Customer_Type {
+
 	/**
-	 * Registers Customer WPObject type
+	 * Registers Customer WPObject type and related fields.
 	 */
 	public static function register() {
 		register_graphql_object_type(
@@ -37,9 +33,9 @@ class Customer_Type {
 						'type'        => array( 'non_null' => 'ID' ),
 						'description' => __( 'The globally unique identifier for the customer', 'wp-graphql-woocommerce' ),
 					),
-					'customerId'            => array(
+					'databaseId'            => array(
 						'type'        => 'Int',
-						'description' => __( 'The Id of the user. Equivalent to WP_User->ID', 'wp-graphql-woocommerce' ),
+						'description' => __( 'The ID of the customer in the database', 'wp-graphql-woocommerce' ),
 					),
 					'isVatExempt'           => array(
 						'type'        => 'Boolean',
@@ -112,61 +108,36 @@ class Customer_Type {
 						'type'        => 'Boolean',
 						'description' => __( 'Return the date customer was last updated', 'wp-graphql-woocommerce' ),
 					),
+					'sessionToken'          => array(
+						'type'        => 'String',
+						'description' => __( 'A JWT token that can be used in future requests to for WooCommerce session identification', 'wp-graphql-woocommerce' ),
+						'resolve'     => function( $source ) {
+							if ( \get_current_user_id() === $source->ID ) {
+								return apply_filters( 'graphql_customer_session_token', \WC()->session->build_token() );
+							}
+
+							return null;
+						},
+					),
 				),
 			)
 		);
 
+		/**
+		 * Register the "sessionToken" field to the "User" type.
+		 */
 		register_graphql_field(
-			'RootQuery',
-			'customer',
+			'User',
+			'wooSessionToken',
 			array(
-				'type'        => 'Customer',
-				'description' => __( 'A customer object', 'wp-graphql-woocommerce' ),
-				'args'        => array(
-					'id' => array(
-						'type' => 'ID',
-					),
-				),
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					$customer_id = 0;
-					if ( ! empty( $args['id'] ) ) {
-						$id_components = Relay::fromGlobalId( $args['id'] );
-						if ( ! isset( $id_components['id'] ) || ! absint( $id_components['id'] ) ) {
-							throw new UserError( __( 'The ID input is invalid', 'wp-graphql-woocommerce' ) );
-						}
-
-						$customer_id = absint( $id_components['id'] );
-					} elseif ( isset( $context->viewer->ID ) && ! empty( $context->viewer->ID ) ) {
-						$customer_id = $context->viewer->ID;
+				'type'        => 'String',
+				'description' => __( 'A JWT token that can be used in future requests to for WooCommerce session identification', 'wp-graphql-woocommerce' ),
+				'resolve'     => function( $source ) {
+					if ( \get_current_user_id() === $source->userId ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+						return apply_filters( 'graphql_customer_session_token', \WC()->session->build_token() );
 					}
 
-					if ( ! $customer_id ) {
-						throw new UserError( __( 'You must be logged in to access customer fields', 'wp-graphql-woocommerce' ) );
-					}
-
-					return Factory::resolve_customer( $customer_id, $context );
-				},
-			)
-		);
-
-		register_graphql_field(
-			'RootQuery',
-			'customerBy',
-			array(
-				'type'        => 'Customer',
-				'description' => __( 'A customer object', 'wp-graphql-woocommerce' ),
-				'args'        => array(
-					'customerId' => array(
-						'type'        => array( 'non_null' => 'Int' ),
-						'description' => __( 'Get the customer by their database ID', 'wp-graphql-woocommerce' ),
-					),
-				),
-				'resolve'     => function ( $source, array $args, AppContext $context, ResolveInfo $info ) {
-					if ( empty( $args['customerId'] ) ) {
-						throw new UserError( __( 'customerId must be provided and it must be an integer value', 'wp-graphql-woocommerce' ) );
-					}
-					$customer_id = absint( $args['customerId'] );
-					return Factory::resolve_customer( $customer_id, $context );
+					return null;
 				},
 			)
 		);

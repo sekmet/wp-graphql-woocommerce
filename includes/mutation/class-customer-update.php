@@ -13,13 +13,15 @@ use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
 use WPGraphQL\WooCommerce\Data\Mutation\Customer_Mutation;
 use WPGraphQL\WooCommerce\Model\Customer;
-use WPGraphQL\Model\User;
+use WPGraphQL\Mutation\UserCreate;
 use WPGraphQL\Mutation\UserUpdate;
+use WC_Customer;
 
 /**
  * Class - Customer_Update
  */
 class Customer_Update {
+
 	/**
 	 * Registers mutation
 	 */
@@ -40,9 +42,13 @@ class Customer_Update {
 	 * @return array
 	 */
 	public static function get_input_fields() {
-		$input_fields = array_merge(
-			UserUpdate::get_input_fields(),
+		return array_merge(
+			UserCreate::get_input_fields(),
 			array(
+				'id'                    => array(
+					'type'        => 'ID',
+					'description' => __( 'The ID of the user', 'wp-graphql-woocommerce' ),
+				),
 				'billing'               => array(
 					'type'        => 'CustomerAddressInput',
 					'description' => __( 'Customer billing information', 'wp-graphql-woocommerce' ),
@@ -55,10 +61,12 @@ class Customer_Update {
 					'type'        => 'Boolean',
 					'description' => __( 'Customer shipping is identical to billing address', 'wp-graphql-woocommerce' ),
 				),
+				'metaData'              => array(
+					'description' => __( 'Meta data.', 'wp-graphql-woocommerce' ),
+					'type'        => array( 'list_of' => 'MetaDataInput' ),
+				),
 			)
 		);
-
-		return $input_fields;
 	}
 
 	/**
@@ -84,29 +92,26 @@ class Customer_Update {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
-			// Get closure from "UserRegister::mutate_and_get_payload".
-			$update_user = UserUpdate::mutate_and_get_payload();
+			$session_only = empty( $input['id'] );
+			$payload      = null;
 
-			// Update customer with core UserUpdate closure.
-			$payload = $update_user( $input, $context, $info );
+			if ( ! $session_only ) {
+				// Get closure from "UserRegister::mutate_and_get_payload".
+				$update_user = UserUpdate::mutate_and_get_payload();
 
-			if ( empty( $payload ) ) {
-				throw new UserError( __( 'Failed to update customer.', 'wp-graphql-woocommerce' ) );
+				// Update customer with core UserUpdate closure.
+				$payload = $update_user( $input, $context, $info );
+
+				if ( empty( $payload ) ) {
+					throw new UserError( __( 'Failed to update customer.', 'wp-graphql-woocommerce' ) );
+				}
 			}
 
 			// Map all of the args from GQL to WC friendly.
 			$customer_args = Customer_Mutation::prepare_customer_props( $input, 'update' );
 
 			// Create customer object.
-			$customer = new \WC_Customer( $payload['id'] );
-
-			// Set billing address.
-			if ( ! empty( $customer_args['billing'] ) ) {
-				foreach ( $customer_args['billing'] as $prop => $value ) {
-					$setter = 'set_billing_' . $prop;
-					$customer->{$setter}( $value );
-				}
-			}
+			$customer = ! $session_only ? new WC_Customer( $payload['id'] ) : \WC()->customer;
 
 			// Copy billing address as shipping address.
 			if ( ! empty( $input['shippingSameAsBilling'] ) && $input['shippingSameAsBilling'] ) {
@@ -116,19 +121,35 @@ class Customer_Update {
 				);
 			}
 
-			// Set shipping address.
-			if ( ! empty( $customer_args['shipping'] ) ) {
-				foreach ( $customer_args['shipping'] as $prop => $value ) {
-					$setter = 'set_shipping_' . $prop;
-					$customer->{$setter}( $value );
+			// Update customer fields.
+			foreach ( $customer_args as $prop => $value ) {
+
+				// If field group like 'shipping' or 'billing'.
+				if ( ! empty( $value ) && \is_array( $value ) ) {
+
+					// Check if group field has set function and assigns new value.
+					foreach ( $value as $field => $field_value ) {
+						if ( is_callable( array( $customer, "set_{$prop}_{$field}" ) ) ) {
+							$customer->{"set_{$prop}_{$field}"}( $field_value );
+						}
+					}
+
+					// If field has set function and assigns new value.
+				} elseif ( is_callable( array( $customer, "set_{$prop}" ) ) ) {
+					$customer->{"set_{$prop}"}( $value );
 				}
+			}
+
+			// Set meta data.
+			if ( ! empty( $input['metaData'] ) ) {
+				Customer_Mutation::input_meta_data_mapping( $customer, $input['metaData'] );
 			}
 
 			// Save customer and get customer ID.
 			$customer->save();
 
 			// Return payload.
-			return $payload;
+			return ! empty( $payload ) ? $payload : array( 'id' => 'session' );
 		};
 	}
 }

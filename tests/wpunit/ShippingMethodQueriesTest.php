@@ -8,7 +8,7 @@ class ShippingMethodQueriesTest extends \Codeception\TestCase\WPTestCase {
 	private $method;
 	private $helper;
 
-	public function setUp() {
+	public function setUp(): void {
 		parent::setUp();
 
 		$this->shop_manager = $this->factory->user->create( array( 'role' => 'shop_manager' ) );
@@ -17,7 +17,7 @@ class ShippingMethodQueriesTest extends \Codeception\TestCase\WPTestCase {
 		$this->method       = 'flat_rate';
 	}
 
-	public function tearDown() {
+	public function tearDown(): void {
 		// your tear down methods here
 		// then
 		parent::tearDown();
@@ -28,10 +28,10 @@ class ShippingMethodQueriesTest extends \Codeception\TestCase\WPTestCase {
 		$id = Relay::toGlobalId( 'shipping_method', $this->method );
 
 		$query = '
-			query shippingMethodQuery( $id: ID, $methodId: ID ) {
-				shippingMethod( id: $id, methodId: $methodId ) {
+			query( $id: ID!, $idType: ShippingMethodIdTypeEnum ) {
+				shippingMethod( id: $id, idType: $idType ) {
 					id
-					methodId
+					databaseId
 					title
 					description
 				}
@@ -40,37 +40,53 @@ class ShippingMethodQueriesTest extends \Codeception\TestCase\WPTestCase {
 
 		/**
 		 * Assertion One
-		 * 
-		 * test query and "id" query argument
+		 *
+		 * test "ID" ID type.
 		 */
-		$variables = array( 'id' => $id );
-		$actual = do_graphql_request( $query, 'shippingMethodQuery', $variables );
+		$variables = array(
+			'id'     => $id,
+			'idType' => 'ID',
+		);
+		$actual = graphql(
+			array(
+				'query'     => $query,
+				'variables' => $variables,
+			 )
+		);
 		$expected = array( 'data' => array( 'shippingMethod' => $this->helper->print_query( $this->method ) ) );
 
 		// use --debug flag to view.
 		codecept_debug( $actual );
 
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertEquals( $expected, $actual );
 
 		/**
 		 * Assertion Two
-		 * 
-		 * test query and "methodId" query argument
+		 *
+		 * test "DATABASE_ID" ID type.
 		 */
-		$variables = array( 'methodId' => $this->method );
-		$actual = do_graphql_request( $query, 'shippingMethodQuery', $variables );
+		$variables = array(
+			'id'     => $this->method,
+			'idType' => 'DATABASE_ID',
+		);
+		$actual = graphql(
+			array(
+				'query'     => $query,
+				'variables' => $variables,
+			 )
+		);
 		$expected = array( 'data' => array( 'shippingMethod' => $this->helper->print_query( $this->method ) ) );
 
 		// use --debug flag to view.
 		codecept_debug( $actual );
 
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertEquals( $expected, $actual );
 
 	}
 
 	public function testShippingMethodsQuery() {
 		$wc_shipping = WC_Shipping::instance();
-		$methods = array_values( 
+		$methods = array_values(
 			array_map(
 				function( $method ) {
 					return array( 'id' => Relay::toGlobalId( 'shipping_method', $method->id ) );
@@ -91,7 +107,7 @@ class ShippingMethodQueriesTest extends \Codeception\TestCase\WPTestCase {
 
 		/**
 		 * Assertion One
-		 * 
+		 *
 		 * tests query
 		 */
 		$actual = do_graphql_request( $query, 'shippingMethodQuery' );
@@ -100,6 +116,6 @@ class ShippingMethodQueriesTest extends \Codeception\TestCase\WPTestCase {
 		// use --debug flag to view.
 		codecept_debug( $actual );
 
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertEquals( $expected, $actual );
 	}
 }

@@ -1,41 +1,110 @@
 <?php
 
-use GraphQLRelay\Relay;
+use WPGraphQL\Type\WPEnumType;
 
-class OrderQueriesTest extends \Codeception\TestCase\WPTestCase {
-	private $shop_manager;
-	private $customer;
-	private $order;
-	private $order_helper;
-	private $product_helper;
-	private $customer_helper;
+class OrderQueriesTest extends \Tests\WPGraphQL\WooCommerce\TestCase\WooGraphQLTestCase {
 
-	public function setUp() {
-		parent::setUp();
+	public function expectedOrderData( $order_id ) {
+		$order = \wc_get_order( $order_id );
 
-		$this->shop_manager    = $this->factory->user->create( array( 'role' => 'shop_manager' ) );
-		$this->customer        = $this->factory->user->create( array( 'role' => 'customer' ) );
-		$this->order_helper    = $this->getModule('\Helper\Wpunit')->order();
-		$this->product_helper  = $this->getModule('\Helper\Wpunit')->product();
-		$this->customer_helper = $this->getModule('\Helper\Wpunit')->customer();
-		$this->order           = $this->order_helper->create();
-	}
+		$expected = array(
+			$this->expectedObject(
+				'order',
+				array(
+					$this->expectedField( 'id', $this->toRelayId( 'shop_order', $order_id ) ),
+					$this->expectedField( 'databaseId', $order->get_id() ),
+					$this->expectedField( 'currency', $this->maybe( $order->get_currency() ) ),
+					$this->expectedField( 'orderVersion', $this->maybe( $order->get_version() ) ),
+					$this->expectedField( 'date', $order->get_date_created()->__toString() ),
+					$this->expectedField( 'modified', $order->get_date_modified()->__toString() ),
+					$this->expectedField( 'status', WPEnumType::get_safe_name( $order->get_status() ) ),
+					$this->expectedField( 'discountTotal', \wc_graphql_price(  $order->get_discount_total(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'discountTax', \wc_graphql_price( $order->get_discount_tax(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'shippingTotal', \wc_graphql_price( $order->get_shipping_total(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'shippingTax', \wc_graphql_price( $order->get_shipping_tax(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'cartTax', \wc_graphql_price( $order->get_cart_tax(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'total', \wc_graphql_price( $order->get_total(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'totalTax', \wc_graphql_price( $order->get_total_tax(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'subtotal', \wc_graphql_price( $order->get_subtotal(), array( 'currency' => $order->get_currency() ) ) ),
+					$this->expectedField( 'orderNumber', $order->get_order_number() ),
+					$this->expectedField( 'orderKey', $order->get_order_key() ),
+					$this->expectedField( 'createdVia', $this->maybe( $order->get_created_via() ) ),
+					$this->expectedField( 'pricesIncludeTax', $order->get_prices_include_tax() ),
+					$this->expectedField( 'parent', self::IS_NULL ),
+					$this->expectedField(
+						'customer',
+						$this->maybe(
+							array(
+								$order->get_customer_id(),
+								array( 'id' => $this->toRelayId( 'customer', $order->get_customer_id() ) ),
+							),
+							self::IS_NULL
+						)
+					),
+					$this->expectedField( 'customerIpAddress', $this->maybe( $order->get_customer_ip_address() ) ),
+					$this->expectedField( 'customerUserAgent', $this->maybe( $order->get_customer_user_agent() ) ),
+					$this->expectedField( 'customerNote', $this->maybe( $order->get_customer_note() ) ),
+					$this->expectedObject(
+						'billing',
+						array(
+							$this->expectedField( 'firstName', $this->maybe( $order->get_billing_first_name() ) ),
+							$this->expectedField( 'lastName', $this->maybe( $order->get_billing_last_name() ) ),
+							$this->expectedField( 'company', $this->maybe( $order->get_billing_company() ) ),
+							$this->expectedField( 'address1', $this->maybe( $order->get_billing_address_1() ) ),
+							$this->expectedField( 'address2', $this->maybe( $order->get_billing_address_2() ) ),
+							$this->expectedField( 'city', $this->maybe( $order->get_billing_city() ) ),
+							$this->expectedField( 'state', $this->maybe( $order->get_billing_state() ) ),
+							$this->expectedField( 'postcode', $this->maybe( $order->get_billing_postcode()  ) ),
+							$this->expectedField( 'country', $this->maybe( $order->get_billing_country() ) ),
+							$this->expectedField( 'email', $this->maybe( $order->get_billing_email() ) ),
+							$this->expectedField( 'phone', $this->maybe( $order->get_billing_phone() ) ),
+						)
+					),
+					$this->expectedObject(
+						'shipping',
+						array(
+							$this->expectedField( 'firstName', $this->maybe( $order->get_shipping_first_name() ) ),
+							$this->expectedField( 'lastName', $this->maybe( $order->get_shipping_last_name() ) ),
+							$this->expectedField( 'company', $this->maybe( $order->get_shipping_company() ) ),
+							$this->expectedField( 'address1', $this->maybe( $order->get_shipping_address_1() ) ),
+							$this->expectedField( 'address2', $this->maybe( $order->get_shipping_address_2() ) ),
+							$this->expectedField( 'city', $this->maybe( $order->get_shipping_city() ) ),
+							$this->expectedField( 'state', $this->maybe( $order->get_shipping_state() ) ),
+							$this->expectedField( 'postcode', $this->maybe( $order->get_shipping_postcode()  ) ),
+							$this->expectedField( 'country', $this->maybe( $order->get_shipping_country() ) ),
+						)
+					),
+					$this->expectedField( 'paymentMethod', $this->maybe( $order->get_payment_method() ) ),
+					$this->expectedField( 'paymentMethodTitle', $this->maybe( $order->get_payment_method_title() ) ),
+					$this->expectedField( 'transactionId', $this->maybe( $order->get_transaction_id() ) ),
+					$this->expectedField( 'dateCompleted', $this->maybe( $order->get_date_completed() ) ),
+					$this->expectedField( 'datePaid', $this->maybe( $order->get_date_paid() ) ),
+					$this->expectedField( 'cartHash', $this->maybe( $order->get_cart_hash() ) ),
+					$this->expectedField( 'shippingAddressMapUrl', $this->maybe( $order->get_shipping_address_map_url() ) ),
+					$this->expectedField( 'hasBillingAddress', $order->has_billing_address() ),
+					$this->expectedField( 'hasShippingAddress', $order->has_shipping_address() ),
+					$this->expectedField( 'isDownloadPermitted', $order->is_download_permitted() ),
+					$this->expectedField( 'needsShippingAddress', $order->needs_shipping_address() ),
+					$this->expectedField( 'hasDownloadableItem', $order->has_downloadable_item() ),
+					$this->expectedField( 'needsPayment', $order->needs_payment() ),
+					$this->expectedField( 'needsProcessing', $order->needs_processing() ),
+				)
+			),
+		);
 
-	public function tearDown() {
-		// your tear down methods here
-		// then
-		parent::tearDown();
+		return $expected;
 	}
 
 	// tests
 	public function testOrderQuery() {
-		$id    = Relay::toGlobalId( 'shop_order', $this->order );
+		$order_id = $this->factory->order->createNew();
+		$id       = $this->toRelayId( 'shop_order', $order_id );
 
 		$query = '
 			query ($id: ID!) {
 				order(id: $id) {
 					id
-					orderId
+					databaseId
 					currency
 					orderVersion
 					date
@@ -99,108 +168,121 @@ class OrderQueriesTest extends \Codeception\TestCase\WPTestCase {
 					needsShippingAddress
 					hasDownloadableItem
 					downloadableItems {
-						downloadId
+						nodes {
+							url
+							accessExpires
+							downloadId
+							downloadsRemaining
+							name
+							product {
+								databaseId
+							}
+							download {
+								downloadId
+							}
+						}
 					}
 					needsPayment
 					needsProcessing
 				}
 			}
 		';
-		
+
 		/**
 		 * Assertion One
-		 * 
-		 * tests query as customer
+		 *
+		 * tests query as customer, should return "null" because the customer isn't authorized.
 		 */
-		wp_set_current_user( $this->customer );
+		$this->loginAsCustomer();
 		$variables = array( 'id' => $id );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array( 'data' => array( 'order' => $this->order_helper->print_restricted_query( $this->order ) ) );
+		$response  = $this->graphql( compact( 'query', 'variables' ) );
+		$expected  = array( $this->expectedField( 'order', self::IS_NULL ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEqualSets( $expected, $actual );
-
-		// Clear loader cache.
-		$this->getModule('\Helper\Wpunit')->clear_loader_cache( 'wc_post_crud' );
+		$this->assertQuerySuccessful( $response, $expected );
 
 		/**
 		 * Assertion Two
-		 * 
+		 *
 		 * tests query as shop manager
 		 */
-		wp_set_current_user( $this->shop_manager );
-		$variables = array( 'id' => $id );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array( 'data' => array( 'order' => $this->order_helper->print_query( $this->order ) ) );
+		$this->loginAsShopManager();
+		$response  = $this->graphql( compact( 'query', 'variables' ) );
+		$expected  = $this->expectedOrderData( $order_id );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
 	}
 
-	public function testOrderByQueryAndArgs() {
-		$id    = Relay::toGlobalId( 'shop_order', $this->order );
+	public function testOrderQueryAndIds() {
+		$order_id = $this->factory->order->createNew();
+		$id       = $this->toRelayId( 'shop_order', $order_id );
 
 		$query = '
-			query ($id: ID, $orderId: Int, $orderKey: String) {
-				orderBy(id: $id, orderId: $orderId, orderKey: $orderKey) {
+			query ($id: ID!, $idType: OrderIdTypeEnum ) {
+				order(id: $id, idType: $idType) {
 					id
 				}
 			}
 		';
 
+		// Must be an "shop_manager" or "admin" to query orders not owned by the user.
+		$this->loginAsShopManager();
+
 		/**
 		 * Assertion One
-		 * 
-		 * tests query and "id" arg
+		 *
+		 * tests "ID" ID type.
 		 */
-		$variables = array( 'id' => $id );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array( 'data' => array( 'orderBy' => array( 'id' => $id ) ) );
+		$variables = array(
+			'id'     => $id,
+			'idType' => 'ID',
+		);
+		$response  = $this->graphql( compact( 'query', 'variables' ) );
+		$expected  = array( $this->expectedField( 'order.id', $id ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
 
 		/**
 		 * Assertion Two
-		 * 
-		 * tests query and "orderId" arg
+		 *
+		 * tests "DATABASE_ID" ID type.
 		 */
-		$variables = array( 'orderId' => $this->order );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array( 'data' => array( 'orderBy' => array( 'id' => $id ) ) );
+		$variables = array(
+			'id'     => $order_id,
+			'idType' => 'DATABASE_ID',
+		);
+		$response  = $this->graphql( compact( 'query', 'variables' ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
 
 		/**
 		 * Assertion Three
-		 * 
-		 * tests query and "orderNumber" arg
+		 *
+		 * tests "ORDER_NUMBER" ID type
 		 */
-		$variables = array( 'orderKey' => $this->order_helper->get_order_key( $this->order ) );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array( 'data' => array( 'orderBy' => array( 'id' => $id ) ) );
+		$variables = array(
+			'id'     => $this->factory->order->get_order_key( $order_id ),
+			'idType' => 'ORDER_NUMBER',
+		);
+		$response  = $this->graphql( compact( 'query', 'variables' ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEqualSets( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
 	}
 
 	public function testOrdersQueryAndWhereArgs() {
-		$customer = $this->customer_helper->create();
-		$product  = $this->product_helper->create_simple();
+		// Create and delete scrap/old order(s).
+		$this->factory->order->createNew();
+		$query      = new \WC_Order_Query();
+		$old_orders = $query->get_orders();
+		foreach ( $old_orders as $order ) {
+			$this->logData( 'Order ' . $order->get_id() . ' deleted.' );
+			$this->factory->order->delete_order( $order );
+		}
+
+		// Create order for query response.
+		$customer = $this->factory->customer->create();
+		$product  = $this->factory->product->createSimple();
 		$orders   = array(
-			$this->order,
-			$this->order_helper->create(
+			$this->factory->order->createNew(
 				array(),
 				array(
 					'line_items' => array(
@@ -211,7 +293,7 @@ class OrderQueriesTest extends \Codeception\TestCase\WPTestCase {
 					),
 				)
 			),
-			$this->order_helper->create(
+			$this->factory->order->createNew(
 				array(
 					'status'   => 'completed',
 					'customer_id' => $customer,
@@ -245,147 +327,89 @@ class OrderQueriesTest extends \Codeception\TestCase\WPTestCase {
 
 		/**
 		 * Assertion One
-		 * 
+		 *
 		 * tests query with no without required capabilities
 		 */
-		wp_set_current_user( $this->customer );
-		$actual   = graphql( array( 'query' => $query ) );
-		$expected = array( 'data' => array( 'orders' => array( 'nodes' => array() ) ) );
+		$this->loginAsCustomer();
+		$response = $this->graphql( compact( 'query' ) );
+		$expected = array( $this->expectedField( 'orders.nodes', array() ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEquals( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 
 		/**
 		 * Assertion Two
-		 * 
+		 *
 		 * tests query with required capabilities
 		 */
-		wp_set_current_user( $this->shop_manager );
-		$actual   = graphql( array( 'query' => $query ) );
+		$this->loginAsShopManager();
+		$response = $this->graphql( compact( 'query' ) );
 		$expected = array(
-			'data' => array(
-				'orders' => array(
-					'nodes' => $this->order_helper->print_nodes( $orders ),
-				),
-			),
+			$this->expectedNode( 'orders.nodes', array( 'id' => $this->toRelayId( 'shop_order', $orders[0] ) ) ),
+			$this->expectedNode( 'orders.nodes', array( 'id' => $this->toRelayId( 'shop_order', $orders[1] ) ) ),
+			$this->not()->expectedNode( 'orders.nodes', array( 'id' => $this->toRelayId( 'shop_order', $old_orders[0] ) ) ),
 		);
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEquals( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 
 		/**
 		 * Assertion Three
-		 * 
+		 *
 		 * tests "statuses" where argument
 		 */
 		$variables = array( 'statuses' => array( 'COMPLETED' ) );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array(
-			'data' => array(
-				'orders' => array(
-					'nodes' => $this->order_helper->print_nodes(
-						$orders,
-						array(
-							'filter' => function( $id ) {
-								$order = new WC_Order( $id );
-								return $order->get_status() === 'completed';
-							},
-						)
-					),
-				),
-			),
+		$response = $this->graphql( compact( 'query', 'variables' ) );
+		$expected = array(
+			$this->expectedNode( 'orders.nodes', array( 'id' => $this->toRelayId( 'shop_order', $orders[1] ) ) ),
 		);
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEquals( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 
 		/**
 		 * Assertion Four
-		 * 
+		 *
 		 * tests "customerId" where argument
 		 */
 		$variables = array( 'customerId' => $customer );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array(
-			'data' => array(
-				'orders' => array(
-					'nodes' => $this->order_helper->print_nodes(
-						$orders,
-						array(
-							'filter' => function( $id ) use ( $customer ) {
-								$order = new WC_Order( $id );
-								return $order->get_customer_id() === $customer;
-							},
-						)
-					),
-				),
-			),
-		);
+		$response = $this->graphql( compact( 'query', 'variables' ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEquals( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 
 		/**
 		 * Assertion Five
-		 * 
+		 *
 		 * tests "customerIn" where argument
 		 */
 		$variables = array( 'customersIn' => array( $customer ) );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array(
-			'data' => array(
-				'orders' => array(
-					'nodes' => $this->order_helper->print_nodes(
-						$orders,
-						array(
-							'filter' => function( $id ) use ( $customer ) {
-								$order = new WC_Order( $id );
-								return $order->get_customer_id() === $customer;
-							},
-						)
-					),
-				),
-			),
-		);
+		$response = $this->graphql( compact( 'query', 'variables' ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
-
-		$this->assertEquals( $expected, $actual );
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 
 		/**
 		 * Assertion Six
-		 * 
+		 *
 		 * tests "productId" where argument
 		 */
 		$variables = array( 'productId' => $product );
-		$actual    = graphql( array( 'query' => $query, 'variables' => $variables ) );
-		$expected  = array(
-			'data' => array(
-				'orders' => array(
-					'nodes' =>  $this->order_helper->print_nodes(
-						$orders,
-						array(
-							'filter' => function( $id ) use ( $product ) {
-								return $this->order_helper->has_product( $id, $product );
-							},
-						)
-					),
-				),
-			),
-		);
+		$response = $this->graphql( compact( 'query', 'variables' ) );
 
-		// use --debug flag to view.
-		codecept_debug( $actual );
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 
-		$this->assertEquals( $expected, $actual );
+		/**
+		 * Assertion Seven
+		 *
+		 * tests `orders` query as existing customer, should return customer's
+		 * orders only
+		 */
+		$this->loginAs( $customer );
+		$response = $this->graphql( compact( 'query' ) );
+
+		$this->assertQuerySuccessful( $response, $expected );
+		$this->clearLoaderCache( 'wc_post' );
 	}
 }

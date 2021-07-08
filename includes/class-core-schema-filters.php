@@ -9,26 +9,14 @@
 namespace WPGraphQL\WooCommerce;
 
 use WPGraphQL\WooCommerce\Data\Loader\WC_Customer_Loader;
-use WPGraphQL\WooCommerce\Data\Loader\WC_Post_Crud_Loader;
+use WPGraphQL\WooCommerce\Data\Loader\WC_CPT_Loader;
+use WPGraphQL\WooCommerce\Data\Loader\WC_Db_Loader;
+use WPGraphQL\WooCommerce\Data\Factory;
 
 /**
  * Class Core_Schema_Filters
  */
 class Core_Schema_Filters {
-	/**
-	 * Stores instance WC_Customer_Loader
-	 *
-	 * @var WC_Customer_Loader
-	 */
-	private static $customer_loader;
-
-	/**
-	 * Stores instance WC_Post_Crud_Loader
-	 *
-	 * @var WC_Post_Crud_Loader
-	 */
-	private static $post_crud_loader;
-
 	/**
 	 * Register filters
 	 */
@@ -36,33 +24,12 @@ class Core_Schema_Filters {
 		// Registers WooCommerce CPTs.
 		add_filter( 'register_post_type_args', array( __CLASS__, 'register_post_types' ), 10, 2 );
 		add_filter( 'graphql_post_entities_allowed_post_types', array( __CLASS__, 'skip_type_registry' ), 10 );
-		add_filter( 'graphql_union_resolve_type', array( __CLASS__, 'graphql_union_resolve_type' ), 10, 3 );
 
 		// Registers WooCommerce taxonomies.
 		add_filter( 'register_taxonomy_args', array( __CLASS__, 'register_taxonomy_args' ), 10, 2 );
 
 		// Add data-loaders to AppContext.
 		add_filter( 'graphql_data_loaders', array( __CLASS__, 'graphql_data_loaders' ), 10, 2 );
-
-		// Adds connection resolutions for WooGraphQL type to WPGraphQL type connections.
-		add_filter(
-			'graphql_post_object_connection_query_args',
-			array(
-				'\WPGraphQL\WooCommerce\Data\Connection\Post_Connection_Resolver',
-				'get_query_args',
-			),
-			10,
-			5
-		);
-		add_filter(
-			'graphql_term_object_connection_query_args',
-			array(
-				'\WPGraphQL\WooCommerce\Data\Connection\WC_Terms_Connection_Resolver',
-				'get_query_args',
-			),
-			10,
-			5
-		);
 
 		// Add node resolvers.
 		add_filter(
@@ -77,34 +44,77 @@ class Core_Schema_Filters {
 			10,
 			2
 		);
-	}
 
-	/**
-	 * Initializes WC_Loader instance
-	 *
-	 * @param AppContext $context - AppContext.
-	 *
-	 * @return WC_Post_Crud_Loader
-	 */
-	public static function post_crud_loader( $context ) {
-		if ( is_null( self::$post_crud_loader ) ) {
-			self::$post_crud_loader = new WC_Post_Crud_Loader( $context );
-		}
-		return self::$post_crud_loader;
-	}
+		// Filter Unions.
+		add_filter(
+			'graphql_wp_union_type_config',
+			array( __CLASS__, 'inject_union_types' ),
+			10,
+			2
+		);
 
-	/**
-	 * Initializes Customer_Loader instance
-	 *
-	 * @param AppContext $context - AppContext.
-	 *
-	 * @return WC_Customer_Loader
-	 */
-	public static function customer_loader( $context ) {
-		if ( is_null( self::$customer_loader ) ) {
-			self::$customer_loader = new WC_Customer_Loader( $context );
-		}
-		return self::$customer_loader;
+		add_filter(
+			'graphql_union_resolve_type',
+			array( __CLASS__, 'inject_type_resolver' ),
+			10,
+			3
+		);
+
+		add_filter(
+			'graphql_interface_resolve_type',
+			array( __CLASS__, 'inject_type_resolver' ),
+			10,
+			3
+		);
+
+		add_filter(
+			'graphql_dataloader_pre_get_model',
+			array( '\WPGraphQL\WooCommerce\Data\Loader\WC_CPT_Loader', 'inject_post_loader_models' ),
+			10,
+			3
+		);
+
+		add_filter(
+			'graphql_dataloader_get_model',
+			array( '\WPGraphQL\WooCommerce\Data\Loader\WC_Customer_Loader', 'inject_user_loader_models' ),
+			10,
+			3
+		);
+
+		add_filter(
+			'graphql_post_object_connection_query_args',
+			array( '\WPGraphQL\WooCommerce\Connection\Orders', 'post_object_connection_query_args' ),
+			10,
+			5
+		);
+
+		add_filter(
+			'graphql_map_input_fields_to_wp_query',
+			array( '\WPGraphQL\WooCommerce\Connection\Coupons', 'map_input_fields_to_wp_query' ),
+			10,
+			7
+		);
+
+		add_filter(
+			'graphql_map_input_fields_to_wp_query',
+			array( '\WPGraphQL\WooCommerce\Connection\Products', 'map_input_fields_to_wp_query' ),
+			10,
+			7
+		);
+
+		add_filter(
+			'graphql_map_input_fields_to_wp_query',
+			array( '\WPGraphQL\WooCommerce\Connection\Orders', 'map_input_fields_to_wp_query' ),
+			10,
+			7
+		);
+
+		add_filter(
+			'graphql_map_input_fields_to_wp_user_query',
+			array( '\WPGraphQL\WooCommerce\Connection\Customers', 'map_input_fields_to_wp_query' ),
+			10,
+			6
+		);
 	}
 
 	/**
@@ -161,10 +171,10 @@ class Core_Schema_Filters {
 		return array_diff(
 			$post_types,
 			get_post_types(
-				[
+				array(
 					'show_in_graphql'            => true,
 					'skip_graphql_type_registry' => true,
-				]
+				)
 			)
 		);
 	}
@@ -214,7 +224,7 @@ class Core_Schema_Filters {
 			$singular_name               = graphql_format_field_name( $taxonomy );
 			$args['show_in_graphql']     = true;
 			$args['graphql_single_name'] = $singular_name;
-			$args['graphql_plural_name'] = \Inflect::pluralize( $singular_name );
+			$args['graphql_plural_name'] = \WooGraphQL_Inflect::pluralize( $singular_name );
 		}
 
 		return $args;
@@ -230,13 +240,104 @@ class Core_Schema_Filters {
 	 */
 	public static function graphql_data_loaders( $loaders, $context ) {
 		// WooCommerce customer loader.
-		$customer_loader        = self::customer_loader( $context );
+		$customer_loader        = new WC_Customer_Loader( $context );
 		$loaders['wc_customer'] = &$customer_loader;
 
-		// WooCommerce crud object loader.
-		$post_crud_loader        = self::post_crud_loader( $context );
-		$loaders['wc_post_crud'] = &$post_crud_loader;
+		// WooCommerce CPT loader.
+		$cpt_loader         = new WC_CPT_Loader( $context );
+		$loaders['wc_post'] = &$cpt_loader;
+
+		// WooCommerce DB loaders.
+		$cart_item_loader             = new WC_Db_Loader( $context, 'CART_ITEM' );
+		$loaders['cart_item']         = &$cart_item_loader;
+		$downloadable_item_loader     = new WC_Db_Loader( $context, 'DOWNLOADABLE_ITEM' );
+		$loaders['downloadable_item'] = &$downloadable_item_loader;
+		$tax_rate_loader              = new WC_Db_Loader( $context, 'TAX_RATE' );
+		$loaders['tax_rate']          = &$tax_rate_loader;
 
 		return $loaders;
+	}
+
+	/**
+	 * Inject Union types that resolve to Product with Product types
+	 *
+	 * @param array                       $config    WPUnion config.
+	 * @param \WPGraphQL\Type\WPUnionType $wp_union  WPUnion object.
+	 */
+	public static function inject_union_types( $config, $wp_union ) {
+		$refresh_callback = false;
+		if ( in_array( 'Product', $config['typeNames'], true ) ) {
+			// Strip 'Product' from config and child product types.
+			$config['typeNames'] = array_merge(
+				array_filter(
+					$config['typeNames'],
+					function( $type ) {
+						return 'Product' !== $type;
+					}
+				),
+				array_values( \WP_GraphQL_WooCommerce::get_enabled_product_types() )
+			);
+			$refresh_callback    = true;
+		}
+
+		// Update 'types' callback.
+		if ( $refresh_callback ) {
+			$config['types'] = function () use ( $config, $wp_union ) {
+				$prepared_types = array();
+				if ( ! empty( $config['typeNames'] ) && is_array( $config['typeNames'] ) ) {
+					$prepared_types = array();
+					foreach ( $config['typeNames'] as $type_name ) {
+						$prepared_types[] = $wp_union->type_registry->get_type( $type_name );
+					}
+				}
+				return $prepared_types;
+			};
+		}
+
+		return $config;
+	}
+
+	/**
+	 * Inject Union type resolver that resolve to Product with Product types
+	 *
+	 * @param \WPGraphQL\Type\WPObjectType $type      Type be resolve to.
+	 * @param mixed                        $value     Object for which the type is being resolve config.
+	 * @param \WPGraphQL\Type\WPUnionType  $wp_union  WPUnion object.
+	 */
+	public static function inject_union_type_resolver( $type, $value, $wp_union ) {
+		switch ( get_class( $value ) ) {
+			case 'WPGraphQL\WooCommerce\Model\Product':
+			case 'WPGraphQL\WooCommerce\Model\Coupon':
+			case 'WPGraphQL\WooCommerce\Model\Order':
+				$new_type = Factory::resolve_node_type( $type, $value );
+				if ( $new_type ) {
+					$type = $wp_union->type_registry->get_type( $new_type );
+				}
+				break;
+		}
+
+		return $type;
+	}
+
+	/**
+	 * Inject Union type resolver that resolve to Product with Product types
+	 *
+	 * @param \WPGraphQL\Type\WPObjectType $type           Type be resolve to.
+	 * @param mixed                        $value          Object for which the type is being resolve config.
+	 * @param WPUnionType|WPInterfaceType  $abstract_type  WPGraphQL abstract class object.
+	 */
+	public static function inject_type_resolver( $type, $value, $abstract_type ) {
+		switch ( $type ) {
+			case 'Product':
+			case 'Coupon':
+			case 'Order':
+				$new_type = Factory::resolve_node_type( $type, $value );
+				if ( $new_type ) {
+					$type = $abstract_type->type_registry->get_type( $new_type );
+				}
+				break;
+		}
+
+		return $type;
 	}
 }

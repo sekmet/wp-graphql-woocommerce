@@ -16,11 +16,13 @@ use GraphQLRelay\Relay;
 use WPGraphQL\AppContext;
 use WPGraphQL\WooCommerce\Data\Mutation\Order_Mutation;
 use WPGraphQL\WooCommerce\Model\Order;
+use WC_Order_Factory;
 
 /**
  * Class Order_Delete
  */
 class Order_Delete {
+
 	/**
 	 * Registers mutation
 	 */
@@ -41,7 +43,7 @@ class Order_Delete {
 	 * @return array
 	 */
 	public static function get_input_fields() {
-		$input_fields = array_merge(
+		return array_merge(
 			array(
 				'id'          => array(
 					'type'        => 'ID',
@@ -57,8 +59,6 @@ class Order_Delete {
 				),
 			)
 		);
-
-		return $input_fields;
 	}
 
 	/**
@@ -84,10 +84,6 @@ class Order_Delete {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
-			if ( ! Order_Mutation::authorized( 'delete', $input, $context, $info ) ) {
-				throw new UserError( __( 'User does not have the capabilities necessary to delete an order.', 'wp-graphql-woocommerce' ) );
-			}
-
 			// Retrieve order ID.
 			$order_id = null;
 			if ( ! empty( $input['id'] ) ) {
@@ -100,6 +96,11 @@ class Order_Delete {
 				$order_id = absint( $input['orderId'] );
 			} else {
 				throw new UserError( __( 'No order ID provided.', 'wp-graphql-woocommerce' ) );
+			}
+
+			// Check if authorized to delete this order.
+			if ( ! Order_Mutation::authorized( 'delete', $order_id, $input, $context, $info ) ) {
+				throw new UserError( __( 'User does not have the capabilities necessary to delete an order.', 'wp-graphql-woocommerce' ) );
 			}
 
 			$force_delete = false;
@@ -128,10 +129,10 @@ class Order_Delete {
 			 * @param AppContext  $context Request AppContext instance.
 			 * @param ResolveInfo $info    Request ResolveInfo instance.
 			 */
-			do_action( 'woocommerce_graphql_before_order_delete', $order, $input, $context, $info );
+			do_action( 'graphql_woocommerce_before_order_delete', $order, $input, $context, $info );
 
 			// Delete order.
-			$success = Order_Mutation::purge( \WC_Order_Factory::get_order( $order->ID ), $force_delete );
+			$success = Order_Mutation::purge( WC_Order_Factory::get_order( $order->ID ), $force_delete );
 
 			if ( ! $success ) {
 				throw new UserError(
@@ -151,7 +152,7 @@ class Order_Delete {
 			 * @param AppContext  $context Request AppContext instance.
 			 * @param ResolveInfo $info    Request ResolveInfo instance.
 			 */
-			do_action( 'woocommerce_graphql_after_order_delete', $order, $input, $context, $info );
+			do_action( 'graphql_woocommerce_after_order_delete', $order, $input, $context, $info );
 
 			return array( 'order' => $order );
 		};

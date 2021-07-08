@@ -38,7 +38,7 @@ class OrderHelper extends WCG_Helper {
         if ( $save ) {
             return $order->save();
 		}
-		
+
 		return $order;
     }
 
@@ -60,11 +60,11 @@ class OrderHelper extends WCG_Helper {
 		$order->set_shipping_state( $customer->get_shipping_state() );
 		$order->set_shipping_postcode( $customer->get_shipping_postcode() );
         $order->set_shipping_country( $customer->get_shipping_country() );
-        
+
         if ( $save ) {
             return $order->save();
 		}
-		
+
 		return $order;
     }
 
@@ -90,7 +90,7 @@ class OrderHelper extends WCG_Helper {
 		);
 		$_SERVER['REMOTE_ADDR'] = '127.0.0.1'; // Required, else wc_create_order throws an exception
         $order 					= wc_create_order( $order_data );
-        
+
 		// Add line items
 		if ( ! empty( $items['line_items'] ) ) {
 			foreach( $items['line_items'] as $item ) {
@@ -109,12 +109,12 @@ class OrderHelper extends WCG_Helper {
             }
 		}
 		$order->save();
-		
-        
+
+
         // Add billing / shipping address
         $order = $this->set_to_customer_billing_address( $order, $customer_id, false );
         $order = $this->set_to_customer_shipping_address( $order, $customer_id, false );
-        
+
 		// Add shipping costs
 		$shipping_taxes = WC_Tax::calc_shipping_tax( '10', WC_Tax::get_shipping_tax_rates() );
 		$rate           = new WC_Shipping_Rate( 'flat_rate_shipping', 'Flat rate shipping', '10', $shipping_taxes, 'flat_rate' );
@@ -129,11 +129,11 @@ class OrderHelper extends WCG_Helper {
 			$item->add_meta_data( $key, $value, true );
 		}
         $order->add_item( $item );
-        
+
 		// Set payment gateway
 		$payment_gateways = WC()->payment_gateways->payment_gateways();
         $order->set_payment_method( $payment_gateways['bacs'] );
-        
+
 		// Set totals
 		$order->set_shipping_total( 10 );
 		$order->set_discount_total( 0 );
@@ -141,7 +141,7 @@ class OrderHelper extends WCG_Helper {
 		$order->set_cart_tax( 0 );
 		$order->set_shipping_tax( 0 );
         $order->set_total( 50 ); // 4 x $10 simple helper product
-		
+
 		// Set meta data.
 		if ( ! empty( $args['meta_data'] ) ) {
 			$order->set_meta_data( $args['meta_data'] );
@@ -157,7 +157,7 @@ class OrderHelper extends WCG_Helper {
 
 	public function has_product( $id, $product_id ) {
 		$order = new WC_Order( $id );
-		$line_items = $order->get_items(); 
+		$line_items = $order->get_items();
         foreach ( $line_items as $item ) {
             if ( $item['product_id'] == $product_id ) {
                 return true;
@@ -182,7 +182,7 @@ class OrderHelper extends WCG_Helper {
 
 		return array(
 			'id'                    => $this->to_relay_id( $id ),
-			'orderId'               => $data->get_id(),
+			'databaseId'            => $data->get_id(),
 			'currency'              => ! empty( $data->get_currency() ) ? $data->get_currency() : null,
 			'orderVersion'          => ! empty( $data->get_version() ) ? $data->get_version() : null,
             'date'                  => $data->get_date_created()->__toString(),
@@ -203,9 +203,9 @@ class OrderHelper extends WCG_Helper {
 				: null,
 			'pricesIncludeTax'      => $data->get_prices_include_tax(),
 			'parent'                => null,
-			'customer'              => array(
-				'id' =>	Relay::toGlobalId( 'customer', $data->get_customer_id() )
-			),
+			'customer'              => ! empty( $data->get_customer_id() )
+				? array( 'id' => Relay::toGlobalId( 'customer', $data->get_customer_id() ) )
+				: null,
 			'customerIpAddress'     => ! empty( $data->get_customer_ip_address() )
 				? $data->get_customer_ip_address()
 				: null,
@@ -305,19 +305,16 @@ class OrderHelper extends WCG_Helper {
 			'isDownloadPermitted'   => $data->is_download_permitted(),
 			'needsShippingAddress'  => $data->needs_shipping_address(),
 			'hasDownloadableItem'   => $data->has_downloadable_item(),
-			'downloadableItems'     => ! empty( $data->get_downloadable_items() )
-				? array_map(
-					function( $download ) {
-						return array( 'downloadId' => $download->get_id() );
-					},
-					$data->get_downloadable_items()
-				)
-				: null,
+			'downloadableItems'     => array(
+				'nodes' => ! empty( $data->get_downloadable_items() )
+					? $this->print_downloadables( $data->get_id() )
+					: array(),
+			),
 			'needsPayment'          => $data->needs_payment(),
 			'needsProcessing'       => $data->needs_processing(),
 		);
 	}
-	
+
 	public function print_restricted_query( $id ) {
 		$data = new WC_Order( $id );
 
@@ -327,13 +324,13 @@ class OrderHelper extends WCG_Helper {
 
 		return array(
 			'id'                    => $this->to_relay_id( $id ),
-			'orderId'               => $id,
+			'databaseId'            => $id,
 			'currency'              => null,
 			'orderVersion'          => null,
             'date'                  => $data->get_date_created()->__toString(),
             'modified'              => $data->get_date_modified()->__toString(),
-			'status'                => null,
-			'discountTotal'         => \wc_graphql_price(  $data->get_discount_total(), array( 'currency' => $data->get_currency() ) ),
+			'status'                => WPEnumType::get_safe_name( $data->get_status() ),
+			'discountTotal'         => \wc_graphql_price( $data->get_discount_total(), array( 'currency' => $data->get_currency() ) ),
 			'discountTax'           => \wc_graphql_price( $data->get_discount_tax(), array( 'currency' => $data->get_currency() ) ),
 			'shippingTotal'         => \wc_graphql_price( $data->get_shipping_total(), array( 'currency' => $data->get_currency() ) ),
 			'shippingTax'           => \wc_graphql_price( $data->get_shipping_tax(), array( 'currency' => $data->get_currency() ) ),
@@ -435,16 +432,52 @@ class OrderHelper extends WCG_Helper {
 			'isDownloadPermitted'   => $data->is_download_permitted(),
 			'needsShippingAddress'  => $data->needs_shipping_address(),
 			'hasDownloadableItem'   => $data->has_downloadable_item(),
-			'downloadableItems'     => ! empty( $data->get_downloadable_items() )
-				? array_map(
-					function( $download ) {
-						return array( 'downloadId' => $download->get_id() );
-					},
-					$data->get_downloadable_items()
-				)
-				: null,
+			'downloadableItems'     => array(
+				'nodes' => ! empty( $data->get_downloadable_items() )
+					? $this->print_downloadables( $data->get_id() )
+					: array(),
+			),
 			'needsPayment'          => $data->needs_payment(),
 			'needsProcessing'       => $data->needs_processing(),
 		);
+	}
+
+	public function print_downloadables( $id ) {
+		$data = new WC_Order( $id );
+
+		if ( ! $data->get_id() ) {
+			return null;
+		}
+
+		$nodes = array();
+		foreach ( $data->get_downloadable_items() as $item ) {
+			$nodes[] = array(
+				'url'                => $item['download_url'],
+				'accessExpires'      => $item['access_expires'],
+				'downloadId'         => $item['download_id'],
+				'downloadsRemaining' => isset( $item['downloads_remaining'] ) && 'integer' === gettype( $item['downloads_remaining'] )
+					? $item['downloads_remaining']
+					: null,
+				'name'               => $item['download_name'],
+				'product'            => array( 'databaseId' => $item['product_id'] ),
+				'download'           => array( 'downloadId' => $item['download_id'] ),
+			);
+		}
+
+		return $nodes;
+	}
+
+	public function delete_order( $order ) {
+
+		// Delete all products in the order.
+		foreach ( $order->get_items() as $item ) {
+			$product = wc_get_product( $item['product_id'] );
+			if ( $product ) {
+				$product->delete( true );
+			}
+		}
+
+		// Delete the order post.
+		$order->delete( true );
 	}
 }

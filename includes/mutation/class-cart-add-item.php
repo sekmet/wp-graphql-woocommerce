@@ -19,6 +19,7 @@ use WPGraphQL\WooCommerce\Data\Mutation\Cart_Mutation;
  * Class - Cart_Add_Item
  */
 class Cart_Add_Item {
+
 	/**
 	 * Registers mutation
 	 */
@@ -39,7 +40,7 @@ class Cart_Add_Item {
 	 * @return array
 	 */
 	public static function get_input_fields() {
-		$input_fields = array(
+		return array(
 			'productId'   => array(
 				'type'        => array( 'non_null' => 'Int' ),
 				'description' => __( 'Cart item product database ID or global ID', 'wp-graphql-woocommerce' ),
@@ -61,8 +62,6 @@ class Cart_Add_Item {
 				'description' => __( 'JSON string representation of extra cart item data', 'wp-graphql-woocommerce' ),
 			),
 		);
-
-		return $input_fields;
 	}
 
 	/**
@@ -80,6 +79,7 @@ class Cart_Add_Item {
 					return $item;
 				},
 			),
+			'cart'     => Cart_Mutation::get_cart_field( true ),
 		);
 	}
 
@@ -90,26 +90,32 @@ class Cart_Add_Item {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
-			// Retrieve product database ID if relay ID provided.
-			if ( empty( $input['productId'] ) ) {
-				throw new UserError( __( 'No product ID provided', 'wp-graphql-woocommerce' ) );
-			}
-			if ( ! \wc_get_product( $input['productId'] ) ) {
-				throw new UserError( __( 'No product found matching the ID provided', 'wp-graphql-woocommerce' ) );
-			}
+			Cart_Mutation::check_session_token();
 
 			// Prepare args for "add_to_cart" from input data.
 			$cart_item_args = Cart_Mutation::prepare_cart_item( $input, $context, $info );
 
 			// Add item to cart and get item key.
-			$cart_item_key = \WC()->cart->add_to_cart( ...$cart_item_args );
-
-			if ( empty( $cart_item_key ) ) {
-				throw new UserError( __( 'Failed to add cart item. Please check input.', 'wp-graphql-woocommerce' ) );
+			try {
+				$cart_item_key = \WC()->cart->add_to_cart( ...$cart_item_args );
+			} catch ( \Exception $e ) { // Repackage any errors.
+				throw new UserError( $e->getMessage() );
 			}
 
-			// Return payload.
-			return array( 'key' => $cart_item_key );
+			// If cart item key valid return payload.
+			if ( false !== $cart_item_key ) {
+				return array( 'key' => $cart_item_key );
+			}
+
+			// Process errors.
+			$notices = \WC()->session->get( 'wc_notices' );
+			if ( ! empty( $notices['error'] ) ) {
+				$cart_error_messages = implode( ' ', array_column( $notices['error'], 'notice' ) );
+				\wc_clear_notices();
+				throw new UserError( $cart_error_messages );
+			} else {
+				throw new UserError( __( 'Failed to add cart item. Please check input.', 'wp-graphql-woocommerce' ) );
+			}
 		};
 	}
 }

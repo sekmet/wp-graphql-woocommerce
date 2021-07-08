@@ -4,7 +4,7 @@
  *
  * Registers OrderItem WPObject type and queries
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPObject
  * @since   0.0.2
  */
 
@@ -17,6 +17,7 @@ use WPGraphQL\WooCommerce\Data\Factory;
  * Class Order_Item_Type
  */
 class Order_Item_Type {
+
 	/**
 	 * Register order item type
 	 */
@@ -145,8 +146,8 @@ class Order_Item_Type {
 					'taxRate'          => array(
 						'type'        => 'TaxRate',
 						'description' => __( 'Tax line\'s tax rate', 'wp-graphql-woocommerce' ),
-						'resolve'     => function( $source ) {
-							return Factory::resolve_tax_rate( $source->rate_id );
+						'resolve'     => function( $source, array $args, AppContext $context ) {
+							return Factory::resolve_tax_rate( $source->rate_id, $context );
 						},
 					),
 				),
@@ -241,7 +242,7 @@ class Order_Item_Type {
 		register_graphql_object_type(
 			'OrderItemTax',
 			array(
-				'description' => __( 'Order item tax statement', 'wp-graphql-woocommercer' ),
+				'description' => __( 'Order item tax statement', 'wp-graphql-woocommerce' ),
 				'fields'      => array(
 					'taxLineId' => array(
 						'type'        => array( 'non_null' => 'Int' ),
@@ -294,11 +295,11 @@ class Order_Item_Type {
 	private static function get_fields( $fields = array() ) {
 		return array_merge(
 			array(
-				'itemId'  => array(
+				'databaseId' => array(
 					'type'        => 'Int',
-					'description' => __( 'The Id of the order item.', 'wp-graphql-woocommerce' ),
+					'description' => __( 'The ID of the order item in the database', 'wp-graphql-woocommerce' ),
 				),
-				'orderId' => array(
+				'orderId'    => array(
 					'type'        => 'Int',
 					'description' => __( 'The Id of the order the order item belongs to.', 'wp-graphql-woocommerce' ),
 				),

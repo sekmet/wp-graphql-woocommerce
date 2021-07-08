@@ -6,14 +6,13 @@
 # If you need both WPWebDriver and WPBrowser tests - create a separate suite.
 
 actor: AcceptanceTester
+coverage:
+  enabled: false
 modules:
-    enabled:
-        - Asserts
-        - REST
-        - WPBrowser
-        - WPDb
-        - WPLoader
-        - \Helper\Acceptance
-    config:
-        WPDb:
-            cleanup: false
+  enabled:
+    - Asserts
+    - REST
+    - WPBrowser
+    - WPDb
+    - WPLoader
+    - \Helper\GraphQLE2E

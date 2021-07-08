@@ -17,11 +17,13 @@ use WPGraphQL\WooCommerce\Data\Mutation\Checkout_Mutation;
 use WPGraphQL\WooCommerce\Data\Mutation\Order_Mutation;
 use WPGraphQL\WooCommerce\Model\Order;
 use WPGraphQL\WooCommerce\Model\Customer;
+use Exception;
 
 /**
  * Class Checkout
  */
 class Checkout {
+
 	/**
 	 * Registers mutation
 	 */
@@ -48,16 +50,12 @@ class Checkout {
 				'description' => __( 'Payment method ID.', 'wp-graphql-woocommerce' ),
 			),
 			'shippingMethod'         => array(
-				'type'        => 'String',
+				'type'        => array( 'list_of' => 'String' ),
 				'description' => __( 'Order shipping method', 'wp-graphql-woocommerce' ),
 			),
 			'shipToDifferentAddress' => array(
 				'type'        => 'Boolean',
 				'description' => __( 'Ship to a separate address', 'wp-graphql-woocommerce' ),
-			),
-			'paymentMethodTitle'     => array(
-				'type'        => 'String',
-				'description' => __( 'Payment method title.', 'woocommerce' ),
 			),
 			'billing'                => array(
 				'type'        => 'CustomerAddressInput',
@@ -70,6 +68,22 @@ class Checkout {
 			'account'                => array(
 				'type'        => 'CreateAccountInput',
 				'description' => __( 'Create new customer account', 'wp-graphql-woocommerce' ),
+			),
+			'transactionId'          => array(
+				'type'        => 'String',
+				'description' => __( 'Order transaction ID', 'wp-graphql-woocommerce' ),
+			),
+			'isPaid'                 => array(
+				'type'        => 'Boolean',
+				'description' => __( 'Define if the order is paid. It will set the status to processing and reduce stock items.', 'wp-graphql-woocommerce' ),
+			),
+			'metaData'               => array(
+				'type'        => array( 'list_of' => 'MetaDataInput' ),
+				'description' => __( 'Order meta data', 'wp-graphql-woocommerce' ),
+			),
+			'customerNote'           => array(
+				'type'        => 'String',
+				'description' => __( 'Order customer note', 'wp-graphql-woocommerce' ),
 			),
 		);
 	}
@@ -93,7 +107,7 @@ class Checkout {
 					return is_user_logged_in() ? new Customer( get_current_user_id() ) : null;
 				},
 			),
-			'result'  => array(
+			'result'   => array(
 				'type'    => 'String',
 				'resolve' => function( $payload ) {
 					return $payload['result'];
@@ -128,9 +142,9 @@ class Checkout {
 				 * @param AppContext  $context Request AppContext instance.
 				 * @param ResolveInfo $info    Request ResolveInfo instance.
 				 */
-				do_action( 'woocommerce_graphql_before_checkout', $args, $input, $context, $info );
+				do_action( 'graphql_woocommerce_before_checkout', $args, $input, $context, $info );
 
-				$order_id = Checkout_Mutation::process_checkout( $args, $context, $info, $results );
+				$order_id = Checkout_Mutation::process_checkout( $args, $input, $context, $info, $results );
 
 				if ( is_wp_error( $order_id ) ) {
 					throw new UserError( $order_id->get_error_message( 'checkout-error' ) );
@@ -144,10 +158,10 @@ class Checkout {
 				 * @param AppContext  $context Request AppContext instance.
 				 * @param ResolveInfo $info    Request ResolveInfo instance.
 				 */
-				do_action( 'woocommerce_graphql_after_checkout', $order_id, $input, $context, $info );
+				do_action( 'graphql_woocommerce_after_checkout', $order_id, $input, $context, $info );
 
 				return array_merge( array( 'id' => $order_id ), $results );
-			} catch ( \Exception $e ) {
+			} catch ( Exception $e ) {
 				Order_Mutation::purge( $order );
 				throw new UserError( $e->getMessage() );
 			}

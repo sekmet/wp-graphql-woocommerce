@@ -3,7 +3,7 @@
 class PaymentGatewayQueriesTest extends \Codeception\TestCase\WPTestCase
 {
 
-	public function setUp() {
+	public function setUp(): void {
 		// before
 		parent::setUp();
 
@@ -33,9 +33,42 @@ class PaymentGatewayQueriesTest extends \Codeception\TestCase\WPTestCase
 				'account'      => '',
 			)
 		);
+
+		delete_option(
+            'woocommerce_stripe_settings',
+            array(
+                'enabled'                       => 'no',
+                'title'                         => 'Credit Card (Stripe)',
+                'description'                   => 'Pay with your credit card via Stripe',
+                'webhook'                       => '',
+                'testmode'                      => 'yes',
+                'test_publishable_key'          => defined( 'STRIPE_API_PUBLISHABLE_KEY' )
+                    ? STRIPE_API_PUBLISHABLE_KEY
+                    : getenv( 'STRIPE_API_PUBLISHABLE_KEY' ),
+                'test_secret_key'               => defined( 'STRIPE_API_SECRET_KEY' )
+                    ? STRIPE_API_SECRET_KEY
+                    : getenv( 'STRIPE_API_SECRET_KEY' ),
+                'test_webhook_secret'           => '',
+                'publishable_key'               => '',
+                'secret_key'                    => '',
+                'webhook_secret'                => '',
+                'inline_cc_form'                => 'no',
+                'statement_descriptor'          => '',
+                'capture'                       => 'yes',
+                'payment_request'               => 'yes',
+                'payment_request_button_type'   => 'buy',
+                'payment_request_button_theme'  => 'dark',
+                'payment_request_button_height' => '44',
+                'saved_cards'                   => 'yes',
+                'logging'                       => 'no',
+            )
+		);
+
+		// Reload gateways.
+		\WC()->payment_gateways->init();
 	}
 
-	public function tearDown() {
+	public function tearDown(): void {
 		// your tear down methods here
 
 		// then
@@ -50,7 +83,6 @@ class PaymentGatewayQueriesTest extends \Codeception\TestCase\WPTestCase
 					nodes {
 						id
 						title
-						description
 						icon
 					}
 				}
@@ -74,7 +106,6 @@ class PaymentGatewayQueriesTest extends \Codeception\TestCase\WPTestCase
 						array(
 							'id'          => 'bacs',
 							'title'       => 'Direct bank transfer',
-							'description' => 'Make your payment directly into our bank account. Please use your Order ID as the payment reference. Your order will not be shipped until the funds have cleared in our account.',
 							'icon'        => null,
 						),
 					),
@@ -114,28 +145,74 @@ class PaymentGatewayQueriesTest extends \Codeception\TestCase\WPTestCase
 				'paymentGateways' => array(
 					'nodes' => array(
 						array(
-							'id'          => 'bacs',
-							'title'       => 'Direct bank transfer',
-							'description' => 'Make your payment directly into our bank account. Please use your Order ID as the payment reference. Your order will not be shipped until the funds have cleared in our account.',
-							'icon'        => null,
+							'id'     => 'bacs',
+							'title'  => 'Direct bank transfer',
+							'icon'   => null,
 						),
 						array(
-							'id'          => 'cheque',
-							'title'       => 'Check payments',
-							'description' => 'Please send a check to Store Name, Store Street, Store Town, Store State / County, Store Postcode.',
-							'icon'        => null,
+							'id'     => 'cheque',
+							'title'  => 'Check payments',
+							'icon'   => null,
 						),
 						array(
-							'id'          => 'cod',
-							'title'       => 'Cash on delivery',
-							'description' => 'Pay with cash upon delivery.',
-							'icon'        => null,
+							'id'     => 'cod',
+							'title'  => 'Cash on delivery',
+							'icon'   => null,
 						),
 						array(
-							'id'          => 'paypal',
-							'title'       => 'PayPal',
-							'description' => 'Pay via PayPal; you can pay with your credit card if you don\'t have a PayPal account.',
-							'icon'        => null,
+							'id'     => 'paypal',
+							'title'  => 'PayPal',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe',
+							'title'  => 'Credit Card (Stripe)',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_sepa',
+							'title'  => 'SEPA Direct Debit',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_bancontact',
+							'title'  => 'Bancontact',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_sofort',
+							'title'  => 'SOFORT',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_giropay',
+							'title'  => 'Giropay',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_eps',
+							'title'  => 'EPS',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_ideal',
+							'title'  => 'iDeal',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_p24',
+							'title'  => 'Przelewy24 (P24)',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_alipay',
+							'title'  => 'Alipay',
+							'icon'   => null,
+						),
+						array(
+							'id'     => 'stripe_multibanco',
+							'title'  => 'Multibanco',
+							'icon'   => null,
 						),
 					),
 				),

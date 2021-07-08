@@ -10,16 +10,23 @@
 
 namespace WPGraphQL\WooCommerce\Data\Connection;
 
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
 use WPGraphQL\Data\Connection\AbstractConnectionResolver;
 use WPGraphQL\Extension\WooCommerce\Model\Order;
+use WPGraphQL\Extension\WooCommerce\Model\Coupon;
 
 /**
  * Class Coupon_Connection_Resolver
+ *
+ * @deprecated v0.10.0
  */
 class Coupon_Connection_Resolver extends AbstractConnectionResolver {
-	use Common_CPT_Input_Sanitize_Functions;
+	/**
+	 * Include CPT Loader connection common functions.
+	 */
+	use WC_CPT_Loader_Common;
 
 	/**
 	 * The name of the post type, or array of post types the connection resolver is resolving for
@@ -48,6 +55,26 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 	}
 
 	/**
+	 * Return the name of the loader to be used with the connection resolver
+	 *
+	 * @return string
+	 */
+	public function get_loader_name() {
+		return 'wc_post';
+	}
+
+	/**
+	 * Given an ID, return the model for the entity or null
+	 *
+	 * @param integer $id Node ID.
+	 *
+	 * @return mixed|Coupon|null
+	 */
+	public function get_node_by_id( $id ) {
+		return $this->get_cpt_model_by_id( $id );
+	}
+
+	/**
 	 * Confirms the uses has the privileges to query Coupons
 	 *
 	 * @return bool
@@ -55,7 +82,6 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 	public function should_execute() {
 		$post_type_obj = get_post_type_object( 'shop_coupon' );
 		switch ( true ) {
-			case 'appliedCoupons' === $this->info->fieldName:
 			case current_user_can( $post_type_obj->cap->edit_posts ):
 				return true;
 			default:
@@ -105,7 +131,7 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 		/**
 		 * Collect the input_fields and sanitize them to prepare them for sending to the WP_Query
 		 */
-		$input_fields = [];
+		$input_fields = array();
 		if ( ! empty( $this->args['where'] ) ) {
 			$input_fields = $this->sanitize_input_fields( $this->args['where'] );
 		}
@@ -119,19 +145,6 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 		 */
 		if ( empty( $query_args['orderby'] ) ) {
 			$query_args['order'] = ! empty( $last ) ? 'ASC' : 'DESC';
-		}
-
-		if ( is_a( $this->source, \WC_Cart::class ) ) {
-			// @codingStandardsIgnoreLine
-			switch( $this->info->fieldName ) {
-				case 'appliedCoupons':
-					$ids = array();
-					foreach ( $this->source->get_applied_coupons() as $code ) {
-						$ids[] = \wc_get_coupon_id_by_code( $code );
-					}
-					$query_args['post__in'] = ! empty( $ids ) ? $ids : array( '0' );
-					break;
-			}
 		}
 
 		/**
@@ -151,10 +164,18 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 	/**
 	 * Executes query
 	 *
+	 * @throws InvariantViolation Filtering suppressed.
+	 *
 	 * @return \WP_Query
 	 */
 	public function get_query() {
-		return new \WP_Query( $this->get_query_args() );
+		$query = new \WP_Query( $this->query_args );
+
+		if ( isset( $query->query_vars['suppress_filters'] ) && true === $query->query_vars['suppress_filters'] ) {
+			throw new InvariantViolation( __( 'WP_Query has been modified by a plugin or theme to suppress_filters, which will cause issues with WPGraphQL Execution. If you need to suppress filters for a specific reason within GraphQL, consider registering a custom field to the WPGraphQL Schema with a custom resolver.', 'wp-graphql-woocommerce' ) );
+		}
+
+		return $query;
 	}
 
 	/**
@@ -162,8 +183,8 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 	 *
 	 * @return array
 	 */
-	public function get_items() {
-		return ! empty( $this->query->posts ) ? $this->query->posts : [];
+	public function get_ids() {
+		return ! empty( $this->query->posts ) ? $this->query->posts : array();
 	}
 
 	/**
@@ -221,5 +242,16 @@ class Coupon_Connection_Resolver extends AbstractConnectionResolver {
 		);
 
 		return $args;
+	}
+
+	/**
+	 * Wrapper for "WC_Connection_Functions::is_valid_post_offset()"
+	 *
+	 * @param integer $offset Post ID.
+	 *
+	 * @return bool
+	 */
+	public function is_valid_offset( $offset ) {
+		return $this->is_valid_post_offset( $offset );
 	}
 }

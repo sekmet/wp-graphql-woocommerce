@@ -15,11 +15,14 @@ use GraphQL\Type\Definition\ResolveInfo;
 use WPGraphQL\AppContext;
 use WPGraphQL\WooCommerce\Data\Mutation\Order_Mutation;
 use WPGraphQL\WooCommerce\Model\Order;
+use WC_Order_Factory;
+use Exception;
 
 /**
  * Class Order_Create
  */
 class Order_Create {
+
 	/**
 	 * Registers mutation
 	 */
@@ -42,7 +45,7 @@ class Order_Create {
 	public static function get_input_fields() {
 		$input_fields = array(
 			'parentId'           => array(
-				'type'        => 'Integer',
+				'type'        => 'Int',
 				'description' => __( 'Parent order ID.', 'wp-graphql-woocommerce' ),
 			),
 			'currency'           => array(
@@ -50,7 +53,7 @@ class Order_Create {
 				'description' => __( 'Currency the order was created with, in ISO format.', 'wp-graphql-woocommerce' ),
 			),
 			'customerId'         => array(
-				'type'        => array( 'non_null' => 'Int' ),
+				'type'        => 'Int',
 				'description' => __( 'Order customer ID', 'wp-graphql-woocommerce' ),
 			),
 			'customerNote'       => array(
@@ -63,15 +66,15 @@ class Order_Create {
 			),
 			'status'             => array(
 				'type'        => 'OrderStatusEnum',
-				'description' => __( 'Order status' ),
+				'description' => __( 'Order status', 'wp-graphql-woocommerce' ),
 			),
 			'paymentMethod'      => array(
 				'type'        => 'String',
-				'description' => __( 'Payment method ID.', 'woocommerce' ),
+				'description' => __( 'Payment method ID.', 'wp-graphql-woocommerce' ),
 			),
 			'paymentMethodTitle' => array(
 				'type'        => 'String',
-				'description' => __( 'Payment method title.', 'woocommerce' ),
+				'description' => __( 'Payment method title.', 'wp-graphql-woocommerce' ),
 			),
 			'transactionId'      => array(
 				'type'        => 'String',
@@ -117,10 +120,16 @@ class Order_Create {
 	 */
 	public static function get_output_fields() {
 		return array(
-			'order' => array(
+			'order'   => array(
 				'type'    => 'Order',
 				'resolve' => function( $payload ) {
 					return new Order( $payload['id'] );
+				},
+			),
+			'orderId' => array(
+				'type'    => 'Int',
+				'resolve' => function( $payload ) {
+					return $payload['id'];
 				},
 			),
 		);
@@ -133,7 +142,8 @@ class Order_Create {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
-			if ( ! Order_Mutation::authorized( 'create', $input, $context, $info ) ) {
+			// Check if authorized to create this order.
+			if ( ! Order_Mutation::authorized( 'create', null, $input, $context, $info ) ) {
 				throw new UserError( __( 'User does not have the capabilities necessary to create an order.', 'wp-graphql-woocommerce' ) );
 			}
 
@@ -149,15 +159,13 @@ class Order_Create {
 					Order_Mutation::apply_coupons( $order_id, $input['coupons'] );
 				}
 
-				$order = \WC_Order_Factory::get_order( $order_id );
+				$order = WC_Order_Factory::get_order( $order_id );
 
 				// Make sure gateways are loaded so hooks from gateways fire on save/create.
 				WC()->payment_gateways();
 
-				// Validate customer ID.
-				if ( empty( $input['customerId'] ) ) {
-					throw new UserError( __( 'No customer ID provided.', 'wp-graphql-woocommerce' ) );
-				} elseif ( ! Order_Mutation::validate_customer( $input ) ) {
+				// Validate customer ID, if set.
+				if ( ! empty( $input['customerId'] ) && ! Order_Mutation::validate_customer( $input ) ) {
 					throw new UserError( __( 'Customer ID is invalid.', 'wp-graphql-woocommerce' ) );
 				}
 
@@ -173,9 +181,7 @@ class Order_Create {
 				// Actions for after the order is saved.
 				if ( true === $input['isPaid'] ) {
 					$order->payment_complete(
-						! empty( $input['transactionId'] ) ?
-							$input['transactionId']
-							: ''
+						! empty( $input['transactionId'] ) ? $input['transactionId'] : ''
 					);
 				}
 
@@ -187,10 +193,10 @@ class Order_Create {
 				 * @param AppContext  $context Request AppContext instance.
 				 * @param ResolveInfo $info    Request ResolveInfo instance.
 				 */
-				do_action( 'woocommerce_graphql_after_order_create', $order, $input, $context, $info );
+				do_action( 'graphql_woocommerce_after_order_create', $order, $input, $context, $info );
 
 				return array( 'id' => $order->get_id() );
-			} catch ( \Exception $e ) {
+			} catch ( Exception $e ) {
 				Order_Mutation::purge( $order );
 				throw new UserError( $e->getMessage() );
 			}

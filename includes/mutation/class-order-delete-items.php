@@ -21,6 +21,7 @@ use WPGraphQL\WooCommerce\Model\Order;
  * Class Order_Delete_Items
  */
 class Order_Delete_Items {
+
 	/**
 	 * Registers mutation
 	 */
@@ -41,7 +42,7 @@ class Order_Delete_Items {
 	 * @return array
 	 */
 	public static function get_input_fields() {
-		$input_fields = array_merge(
+		return array_merge(
 			array(
 				'id'      => array(
 					'type'        => 'ID',
@@ -57,8 +58,6 @@ class Order_Delete_Items {
 				),
 			)
 		);
-
-		return $input_fields;
 	}
 
 	/**
@@ -84,10 +83,6 @@ class Order_Delete_Items {
 	 */
 	public static function mutate_and_get_payload() {
 		return function( $input, AppContext $context, ResolveInfo $info ) {
-			if ( ! Order_Mutation::authorized( 'delete-items', $input, $context, $info ) ) {
-				throw new UserError( __( 'User does not have the capabilities necessary to delete an order.', 'wp-graphql-woocommerce' ) );
-			}
-
 			// Retrieve order ID.
 			$order_id = null;
 			if ( ! empty( $input['id'] ) ) {
@@ -100,6 +95,11 @@ class Order_Delete_Items {
 				$order_id = absint( $input['orderId'] );
 			} else {
 				throw new UserError( __( 'No order ID provided.', 'wp-graphql-woocommerce' ) );
+			}
+
+			// Check if authorized to delete items on this order.
+			if ( ! Order_Mutation::authorized( 'delete-items', $order_id, $input, $context, $info ) ) {
+				throw new UserError( __( 'User does not have the capabilities necessary to delete an order.', 'wp-graphql-woocommerce' ) );
 			}
 
 			// Confirm item IDs.
@@ -134,7 +134,7 @@ class Order_Delete_Items {
 			 * @param AppContext  $context Request AppContext instance.
 			 * @param ResolveInfo $info    Request ResolveInfo instance.
 			 */
-			do_action( 'woocommerce_graphql_before_order_items_delete', $ids, $working_order, $input, $context, $info );
+			do_action( 'graphql_woocommerce_before_order_items_delete', $ids, $working_order, $input, $context, $info );
 
 			// Delete order.
 			$errors = '';
@@ -151,7 +151,7 @@ class Order_Delete_Items {
 			 * @param AppContext  $context Request AppContext instance.
 			 * @param ResolveInfo $info    Request ResolveInfo instance.
 			 */
-			do_action( 'woocommerce_graphql_after_order_delete', $ids, $working_order, $input, $context, $info );
+			do_action( 'graphql_woocommerce_after_order_delete', $ids, $working_order, $input, $context, $info );
 
 			return array( 'order' => $order );
 		};

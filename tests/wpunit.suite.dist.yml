@@ -4,9 +4,11 @@
 
 actor: WpunitTester
 modules:
-    enabled:
-        - WPLoader
-        - \Helper\Wpunit
-    disabled:
-        - WPDb
-        - WPBrowser
+  enabled:
+    - WPLoader
+    - \Helper\Wpunit
+  disabled:
+    - WPDb
+    - WPBrowser
+    - WPFilesystem
+bootstrap: bootstrap.php

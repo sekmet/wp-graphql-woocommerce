@@ -2,7 +2,7 @@
 /**
  * WPEnum Type - CountriesEnum
  *
- * @package \WPGraphQL\WooCommerce\Type\WPEnum
+ * @package WPGraphQL\WooCommerce\Type\WPEnum
  * @since   0.1.0
  */
 
@@ -16,7 +16,8 @@ class Countries {
 	 * Registers type
 	 */
 	public static function register() {
-		$countries = \WC()->countries->get_countries();
+		$wc_countries = new \WC_Countries();
+		$countries    = $wc_countries->get_countries();
 		array_walk(
 			$countries,
 			function( &$value, $code ) {

@@ -10,7 +10,6 @@
 
 namespace WPGraphQL\WooCommerce\Model;
 
-use GraphQLRelay\Relay;
 use WPGraphQL\Model\Model;
 
 /**
@@ -19,10 +18,9 @@ use WPGraphQL\Model\Model;
 class Order_Item extends Model {
 
 	/**
-	 * Stores order item type
+	 * Stores order item type.
 	 *
-	 * @var int $item_type
-	 * @access protected
+	 * @var int
 	 */
 	protected $item_type;
 
@@ -37,9 +35,6 @@ class Order_Item extends Model {
 	 * Order_Item constructor
 	 *
 	 * @param int $item - order item crud object.
-	 *
-	 * @access public
-	 * @return void
 	 */
 	public function __construct( $item ) {
 		$this->data                = $item;
@@ -52,9 +47,10 @@ class Order_Item extends Model {
 			'isPrivate',
 			'isPublic',
 			'id',
-			'orderItemId',
+			'databaseId',
 		);
 
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		$restricted_cap = apply_filters( 'order_item_restricted_cap', '' );
 
 		parent::__construct( $restricted_cap, $allowed_restricted_fields, $author_id );
@@ -65,7 +61,6 @@ class Order_Item extends Model {
 	 *
 	 * @param string $method - function name.
 	 * @param array  $args  - function call arguments.
-	 *
 	 * @return mixed
 	 */
 	public function __call( $method, $args ) {
@@ -74,22 +69,20 @@ class Order_Item extends Model {
 
 	/**
 	 * Initializes the Order field resolvers
-	 *
-	 * @access protected
 	 */
 	protected function init() {
 		if ( empty( $this->fields ) ) {
 			$this->fields = array(
-				'ID'      => function() {
+				'ID'         => function() {
 					return $this->data->get_id();
 				},
-				'itemId'  => function() {
-					return ! empty( $this->data->get_id() ) ? $this->data->get_id() : null;
+				'databaseId' => function() {
+					return $this->ID;
 				},
-				'orderId' => function() {
+				'orderId'    => function() {
 					return ! empty( $this->data->get_order_id() ) ? $this->data->get_order_id() : null;
 				},
-				'type'    => function() {
+				'type'       => function() {
 					return ! empty( $this->data->get_type() ) ? $this->data->get_type() : null;
 				},
 			);
@@ -200,10 +193,10 @@ class Order_Item extends Model {
 								return ! empty( $this->data->get_tax_total() ) ? $this->data->get_tax_total() : null;
 							},
 							'shippingTaxTotal' => function() {
-								return ! empty( $this->data->get_shipping_tax_total() ) ? $this->data->get_shipping_tax_total() : null;
+								return ! is_null( $this->data->get_shipping_tax_total() ) ? $this->data->get_shipping_tax_total() : 0;
 							},
 							'isCompound'       => function() {
-								return ! empty( $this->data->is_compound() ) ? $this->data->is_compound() : null;
+								return ! is_null( $this->data->is_compound() ) ? $this->data->is_compound() : false;
 							},
 							'rate_id'          => function() {
 								return ! empty( $this->data->get_rate_id() ) ? $this->data->get_rate_id() : null;
@@ -268,9 +261,9 @@ class Order_Item extends Model {
 	/**
 	 * Determines if the order item should be considered private
 	 *
-	 * @access public
-	 * @return bool
 	 * @since 0.2.0
+	 *
+	 * @return bool
 	 */
 	protected function is_private() {
 		return $this->order->is_private();
@@ -279,9 +272,9 @@ class Order_Item extends Model {
 	/**
 	 * Retrieve the cap to check if the data should be restricted for the order
 	 *
-	 * @access protected
-	 * @return string
 	 * @since 0.2.0
+	 *
+	 * @return string
 	 */
 	protected function get_restricted_cap() {
 		return $this->order->get_restricted_cap();

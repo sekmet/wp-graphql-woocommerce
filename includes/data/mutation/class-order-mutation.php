@@ -17,23 +17,25 @@ class Order_Mutation {
 	/**
 	 * Filterable authentication function.
 	 *
-	 * @param string      $mutation  Mutation being executed.
-	 * @param array       $input     Input data describing order.
-	 * @param AppContext  $context   AppContext instance.
-	 * @param ResolveInfo $info      ResolveInfo instance.
+	 * @param string       $mutation  Mutation being executed.
+	 * @param integer|null $order_id  Order ID.
+	 * @param array        $input     Input data describing order.
+	 * @param AppContext   $context   AppContext instance.
+	 * @param ResolveInfo  $info      ResolveInfo instance.
 	 *
 	 * @return boolean
 	 */
-	public static function authorized( $mutation = 'create', $input, $context, $info ) {
+	public static function authorized( $mutation = 'create', $order_id = null, $input, $context, $info ) {
 		$post_type_object = get_post_type_object( 'shop_order' );
 
 		return apply_filters(
-			"authorized_to_{$mutation}_orders",
+			"graphql_woocommerce_authorized_to_{$mutation}_orders",
 			current_user_can(
 				'delete' === $mutation
 					? $post_type_object->cap->delete_posts
 					: $post_type_object->cap->edit_posts
 			),
+			$order_id,
 			$input,
 			$context,
 			$info
@@ -47,7 +49,7 @@ class Order_Mutation {
 	 * @param AppContext  $context  AppContext instance.
 	 * @param ResolveInfo $info     ResolveInfo instance.
 	 *
-	 * @return WC_Order
+	 * @return integer
 	 *
 	 * @throws UserError  Error creating order.
 	 */
@@ -76,7 +78,7 @@ class Order_Mutation {
 		 * @param AppContext  $context Request AppContext instance.
 		 * @param ResolveInfo $info    Request ResolveInfo instance.
 		 */
-		do_action( 'woocommerce_graphql_before_order_create', $input, $context, $info );
+		do_action( 'graphql_woocommerce_before_order_create', $input, $context, $info );
 
 		$order = \wc_create_order( $args );
 		if ( is_wp_error( $order ) ) {
@@ -91,7 +93,7 @@ class Order_Mutation {
 		 * @param AppContext  $context Request AppContext instance.
 		 * @param ResolveInfo $info    Request ResolveInfo instance.
 		 */
-		do_action( 'woocommerce_graphql_after_order_create', $order, $input, $context, $info );
+		do_action( 'graphql_woocommerce_after_order_create', $order, $input, $context, $info );
 
 		return $order->get_id();
 	}
@@ -124,7 +126,7 @@ class Order_Mutation {
 				 * @param AppContext  $context   Request AppContext instance.
 				 * @param ResolveInfo $info      Request ResolveInfo instance.
 				 */
-				do_action( "woocommerce_graphql_before_{$type}s_added_to_order", $items, $order_id, $context, $info );
+				do_action( "graphql_woocommerce_before_{$type}s_added_to_order", $items, $order_id, $context, $info );
 
 				foreach ( $items as $item_data ) {
 					// Create Order item.
@@ -150,7 +152,7 @@ class Order_Mutation {
 				 * @param AppContext  $context   Request AppContext instance.
 				 * @param ResolveInfo $info      Request ResolveInfo instance.
 				 */
-				do_action( "woocommerce_graphql_after_{$type}s_added_to_order", $items, $order_id, $context, $info );
+				do_action( "graphql_woocommerce_after_{$type}s_added_to_order", $items, $order_id, $context, $info );
 			}
 		}
 	}
@@ -313,7 +315,7 @@ class Order_Mutation {
 					}
 					break;
 				default:
-					$prop = \Inflect::camel_case_to_underscore( $key );
+					$prop = \WooGraphQL_Inflect::camel_case_to_underscore( $key );
 					if ( is_callable( array( $order, "set_{$prop}" ) ) ) {
 						$order->{"set_{$prop}"}( $value );
 					}
@@ -329,7 +331,7 @@ class Order_Mutation {
 		 * @param AppContext  $context Request AppContext instance.
 		 * @param ResolveInfo $info    Request ResolveInfo instance.
 		 */
-		do_action( 'woocommerce_graphql_before_order_meta_save', $order, $input, $context, $info );
+		do_action( 'graphql_woocommerce_before_order_meta_save', $order, $input, $context, $info );
 
 		$order->save();
 	}
@@ -370,7 +372,7 @@ class Order_Mutation {
 		foreach ( $coupons as $code ) {
 			$results = $order->apply_coupon( wc_clean( $code ) );
 			if ( is_wp_error( $results ) ) {
-				do_action( 'woocommerce_graphql_' . $results->get_error_code(), $results, $code, $coupons, $order );
+				do_action( 'graphql_woocommerce_' . $results->get_error_code(), $results, $code, $coupons, $order );
 			}
 		}
 

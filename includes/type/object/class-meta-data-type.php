@@ -4,19 +4,19 @@
  *
  * Registers MetaData type and queries
  *
- * @package \WPGraphQL\WooCommerce\Type\WPObject
+ * @package WPGraphQL\WooCommerce\Type\WPObject
  * @since   0.0.2
  */
 
 namespace WPGraphQL\WooCommerce\Type\WPObject;
 
-use WPGraphQL\AppContext;
-use WPGraphQL\WooCommerce\Data\Factory;
+use WP_GraphQL_WooCommerce;
 
 /**
  * Class Meta_Data_Type
  */
 class Meta_Data_Type {
+
 	/**
 	 * Register Order type and queries to the WPGraphQL schema
 	 */
@@ -27,7 +27,7 @@ class Meta_Data_Type {
 				'description' => __( 'Extra data defined on the WC object', 'wp-graphql-woocommerce' ),
 				'fields'      => array(
 					'id'    => array(
-						'type'        => array( 'non_null' => 'String' ),
+						'type'        => 'ID',
 						'description' => __( 'Meta ID.', 'wp-graphql-woocommerce' ),
 						'resolve'     => function ( $source ) {
 							return ! empty( $source->id ) ? $source->id : null;
@@ -37,14 +37,14 @@ class Meta_Data_Type {
 						'type'        => array( 'non_null' => 'String' ),
 						'description' => __( 'Meta key.', 'wp-graphql-woocommerce' ),
 						'resolve'     => function ( $source ) {
-							return ! empty( $source->key ) ? $source->key : null;
+							return ! empty( $source->key ) ? (string) $source->key : null;
 						},
 					),
 					'value' => array(
-						'type'        => array( 'non_null' => 'String' ),
+						'type'        => 'String',
 						'description' => __( 'Meta value.', 'wp-graphql-woocommerce' ),
 						'resolve'     => function ( $source ) {
-							return ! empty( $source->value ) ? $source->value : null;
+							return ! empty( $source->value ) ? (string) $source->value : null;
 						},
 					),
 				),
@@ -99,7 +99,7 @@ class Meta_Data_Type {
 						);
 					}
 					// Create meta ID prefix.
-					$id_prefix = apply_filters( 'cart_meta_id_prefix', 'cart_' );
+					$id_prefix = apply_filters( 'graphql_woocommerce_cart_meta_id_prefix', 'cart_' );
 
 					// Format meta data for resolution.
 					$data = array();
@@ -107,7 +107,7 @@ class Meta_Data_Type {
 						$data[] = (object) array(
 							'id'    => "{$id_prefix}_{$key}",
 							'key'   => $key,
-							'value' => $source[ $key ],
+							'value' => is_array( $source[ $key ] ) ? wp_json_encode( $source[ $key ] ) : $source[ $key ],
 						);
 					}
 
@@ -130,7 +130,7 @@ class Meta_Data_Type {
 				'ShippingLine',
 				'TaxLine',
 			),
-			array_values( \WP_GraphQL_WooCommerce::get_enabled_product_types() )
+			array_values( WP_GraphQL_WooCommerce::get_enabled_product_types() )
 		);
 
 		foreach ( $types as $type ) {

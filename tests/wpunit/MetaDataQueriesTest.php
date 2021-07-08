@@ -4,7 +4,7 @@ use GraphQLRelay\Relay;
 
 class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
 
-    public function setUp() {
+    public function setUp(): void {
         // before
         parent::setUp();
 
@@ -26,13 +26,18 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         $this->createObjects();
     }
 
-    public function tearDown() {
+    public function tearDown(): void {
         // Clear cart.
 		WC()->cart->empty_cart( true );
 
         // then
         parent::tearDown();
     }
+
+    public function set_user( $user ) {
+		wp_set_current_user( $user );
+		WC()->customer = new WC_Customer( get_current_user_id(), true );
+	}
 
     private function createObjects() {
         $data = array(
@@ -50,7 +55,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 array(
                     'id'    => 0,
                     'key'   => 'meta_1',
-                    'value' => 'test_meta_3'
+                    'value' => 75,
                 ),
             ),
         );
@@ -62,7 +67,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         $this->customer_id = $this->customers->create( $data );
 
         // Create Order and Refund with meta data.
-        $this->order_id = $this->orders->create( $data );
+        $this->order_id = $this->orders->create( array_merge( $data, array( 'customer_id' => $this->customer ) ) );
         $this->order_items->add_fee( $this->order_id, $data );
         $this->refund_id = $this->refunds->create( $this->order_id, $data );
 
@@ -74,14 +79,21 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         $cart_meta_data = array(
             'meta_1' => 'test_meta_1',
             'meta_2' => 'test_meta_2'
-        );
-        $this->cart_item_key = WC()->cart->add_to_cart(
-            $this->product_id,
-            2,
-            $this->variation_ids['variations'][1],
-            array(),
-            $cart_meta_data
-        );
+		);
+
+		// Clear cart.
+		WC()->cart->empty_cart( true );
+
+		// Add item to cart.
+		$this->cart_item_key = $this->cart->add(
+			array(
+				'product_id'      => $this->variation_ids['product'],
+				'quantity'        => 2,
+				'variation_id'    => $this->variation_ids['variations'][0],
+				'variation'       => array( 'attribute_pa_color' => 'red' ),
+				'cart_item_data'  => $cart_meta_data
+			)
+		)[0];
     }
 
     // tests
@@ -91,7 +103,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 cart {
                     contents {
                         nodes {
-                            key
+							key
                             extraData(key: $key, keysIn: $keysIn) {
                                 key
                                 value
@@ -104,7 +116,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
 
         /**
          * Assertion One
-         * 
+         *
          * query w/o filter
          */
         $actual   = graphql( array( 'query' => $query ) );
@@ -135,11 +147,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Two
-         * 
+         *
          * query w/ "key" filter
          */
         $variables = array( 'key' => 'meta_2' );
@@ -167,11 +179,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Three
-         * 
+         *
          * query w/ "keysIn" filter
          */
         $variables = array( 'keysIn' => array( 'meta_2' ) );
@@ -199,7 +211,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 
     public function testCouponMetaDataQueries() {
@@ -215,10 +227,10 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 }
             }
         ';
-        
+
         /**
          * Assertion One
-         * 
+         *
          * query w/o filters
          */
         wp_set_current_user( $this->shop_manager );
@@ -250,11 +262,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Two
-         * 
+         *
          * query w/ "key" filter
          */
         $variables = array( 'id' => $id, 'key' => 'meta_2' );
@@ -276,11 +288,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Three
-         * 
+         *
          * query w/ "keysIn" filter
          */
         $variables = array( 'id' => $id, 'keysIn' => array( 'meta_2' ) );
@@ -302,11 +314,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Four
-         * 
+         *
          * query w/ "key" filter and "multiple" set to true to get non-unique results.
          */
         $variables = array( 'id' => $id, 'key' => 'meta_1', 'multiple' => true );
@@ -322,7 +334,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                         ),
                         array(
                             'key'   => 'meta_1',
-                            'value' => 'test_meta_3',
+                            'value' => '75',
                         ),
                     )
                 ),
@@ -332,11 +344,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Five
-         * 
+         *
          * query w/ "keysIn" filter and "multiple" set to true to get non-unique results.
          */
         $variables = array( 'id' => $id, 'keysIn' => array( 'meta_1' ), 'multiple' => true );
@@ -352,7 +364,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                         ),
                         array(
                             'key'   => 'meta_1',
-                            'value' => 'test_meta_3',
+                            'value' => '75',
                         ),
                     )
                 ),
@@ -362,11 +374,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
 
         /**
          * Assertion Six
-         * 
+         *
          * query w/o filters and "multiple" set to true to get non-unique results.
          */
         $variables = array( 'id' => $id, 'multiple' => true );
@@ -386,7 +398,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                         ),
                         array(
                             'key'   => 'meta_1',
-                            'value' => 'test_meta_3',
+                            'value' => '75',
                         ),
                     )
                 ),
@@ -396,7 +408,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 
     public function testCustomerMetaDataQueries() {
@@ -411,11 +423,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 }
             }
         ';
-        
+
         /**
          * Assertion One
          */
-        wp_set_current_user( $this->customer_id );
+        $this->set_user( $this->customer_id );
         $actual   = graphql( array( 'query' => $query ) );
         $expected = array(
             'data' => array(
@@ -438,7 +450,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 
     public function testOrderMetaDataQueries() {
@@ -462,7 +474,10 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 }
             }
         ';
-        
+
+        // Must be an "shop_manager" or "admin" to query orders not owned by the user.
+        wp_set_current_user( $this->shop_manager );
+
         /**
          * Assertion One
          */
@@ -510,7 +525,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 
     public function testProductMetaDataQueries() {
@@ -528,7 +543,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 }
             }
         ';
-        
+
         /**
          * Assertion One
          */
@@ -560,7 +575,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 
     public function testProductVariationMetaDataQueries() {
@@ -576,7 +591,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
                 }
             }
         ';
-        
+
         /**
          * Assertion One
          */
@@ -608,7 +623,7 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 
     public function testRefundMetaDataQueries() {
@@ -624,10 +639,11 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
 				}
 			}
         ';
-        
+
         /**
          * Assertion One
          */
+        wp_set_current_user( $this->customer );
         $variables = array( 'id' => $id );
         $actual    = graphql(
             array(
@@ -656,6 +672,6 @@ class MetaDataQueriesTest extends \Codeception\TestCase\WPTestCase {
         // use --debug flag to view.
         codecept_debug( $actual );
 
-        $this->assertEqualSets( $expected, $actual );
+        $this->assertEquals( $expected, $actual );
     }
 }

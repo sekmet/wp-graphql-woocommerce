@@ -1,7 +1,6 @@
 {
     "name": "wp-graphql/wp-graphql-woocommerce",
-    "description": "WooCommerce bindings for wp-graphql",
-    "version": "0.3.0",
+    "description": "WooCommerce bindings for WPGraphQL",
     "type": "wordpress-plugin",
     "keywords": [
         "wordpress",
@@ -13,7 +12,7 @@
         "api",
         "woographql"
     ],
-    "license": "GPL-3.0",
+    "license": "GPL-3.0-or-later",
     "authors": [
         {
             "name": "Geoff Taylor",
@@ -21,18 +20,29 @@
             "role": "Lead developer"
         }
     ],
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://wpackagist.org"
+        }
+    ],
     "require": {
-        "php": ">=5.6.0"
+        "php": ">=7.1.0",
+        "firebase/php-jwt": "^5.0"
     },
     "require-dev": {
-        "lucatume/wp-browser": ">=2.2.1 <2.2.8"
+        "squizlabs/php_codesniffer": "^3.5",
+        "wp-coding-standards/wpcs": "^2.3"
     },
     "config": {
-        "optimize-autoloader": true
+        "optimize-autoloader": true,
+        "process-timeout": 0,
+        "sort-packages": true
     },
     "autoload": {
-        "files":[
-            "includes/connection/common-post-type-args.php"
+        "files": [
+            "includes/connection/wc-cpt-connection-args.php",
+            "includes/functions.php"
         ],
         "psr-4": {
             "WPGraphQL\\WooCommerce\\": "includes/"
@@ -41,15 +51,59 @@
             "includes/"
         ]
     },
-    "scripts": {
-        "install-wp-tests": "bash bin/install-wp-tests.sh",
-        "test": "vendor/bin/codecept run",
-        "functional-test": "vendor/bin/codecept run functional",
-        "acceptance-test": "vendor/bin/codecept run acceptance",
-        "wpunit-test": "vendor/bin/codecept run wpunit"
+    "autoload-dev": {
+        "files": [
+            "tests/_data/config.php"
+        ],
+        "psr-4": {
+          "Tests\\WPGraphQL\\WooCommerce\\": "tests/_support/"
+        }
     },
-    "support"    : {
-		"issues": "https://github.com/wp-graphql/wp-graphql-woocommerce/issues",
-		"source": "https://github.com/wp-graphql/wp-graphql-woocommerce"
-	}
+    "extra": {
+    },
+    "scripts": {
+        "installTestEnv": "bash bin/install-test-env.local.sh",
+        "runPreCommitCleanup": [
+          "bash bin/remove-wordpress.local.sh",
+          "bash bin/remove-testing-library.local.sh"
+        ],
+        "runWPUnitTest": "vendor/bin/codecept run wpunit",
+        "dBuild": "env $(sed -e '/^#/d' .env.testing) docker-compose build",
+        "dRunApp": "env $(sed -e '/^#/d' .env.testing) docker-compose up testable_app app_db mailhog",
+        "dRunTestingDb":"if [ ! \"$(docker ps -a | grep testing_db)\" ]; then env $(sed -e '/^#/d' .env.testing) docker-compose up -d testing_db; fi",
+        "dSetMainDb": "docker-compose exec testable_app ./setup-database.sh main",
+        "dSetTestingDb": "docker-compose exec testable_app wait-for-it -s -t 300 testing_db:3306 -- ./setup-database.sh testing",
+        "dRunTest": [
+            "@dRunTestingDb",
+            "@dSetTestingDb",
+            "docker-compose exec testable_app wait-for-it -s -t 300 testing_db:3306 -- codecept run $FILTER"
+        ],
+        "dRunTestStandalone": "env $(sed -e '/^#/d' .env.testing) docker-compose run --rm run_tests",
+        "dDestroy": "docker-compose down -v",
+        "lint": "vendor/bin/phpcs -vp ."
+    },
+    "support": {
+        "issues": "https://github.com/wp-graphql/wp-graphql-woocommerce/issues",
+        "source": "https://github.com/wp-graphql/wp-graphql-woocommerce"
+    },
+    "archive": {
+      "name": "wp-graphql-wooocommerce",
+      "exclude": [
+        "/.*",
+        "/bin",
+        "/docs",
+        "/local",
+        "/plugin-build",
+        "/tests",
+        "!/vendor",
+        "/codeception.dist.yml",
+        "/codeception.yml",
+        "/composer.json",
+        "/composer.lock",
+        "/docker-composer.yml",
+        "/Dockerfile",
+        "/netlify.toml",
+        "/README.md"
+      ]
+    }
 }

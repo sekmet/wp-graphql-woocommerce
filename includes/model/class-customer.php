@@ -12,31 +12,30 @@ namespace WPGraphQL\WooCommerce\Model;
 
 use GraphQLRelay\Relay;
 use WPGraphQL\Model\Model;
+use WC_Customer;
 
 /**
  * Class Customer
  */
 class Customer extends Model {
+
 	/**
 	 * Customer constructor
 	 *
-	 * @param \WC_Customer|int $id - User ID.
-	 *
-	 * @access public
-	 * @return void
+	 * @param WC_Customer|int $id - User ID.
 	 */
-	public function __construct( $id ) {
-		$this->data                = new \WC_Customer( $id );
-		$allowed_restricted_fields = [
+	public function __construct( $id = 'session' ) {
+		$this->data                = 'session' === $id ? \WC()->customer : new WC_Customer( $id );
+		$allowed_restricted_fields = array(
 			'isRestricted',
 			'isPrivate',
 			'isPublic',
 			'id',
 			'customerId',
-			'displayName',
-		];
+		);
 
-		$restricted_cap = apply_filters( 'customer_restricted_cap', 'list_users' );
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		$restricted_cap = apply_filters( 'customer_restricted_cap', 'session' === $id ? '' : 'list_users' );
 
 		parent::__construct( $restricted_cap, $allowed_restricted_fields, $id );
 	}
@@ -46,7 +45,6 @@ class Customer extends Model {
 	 *
 	 * @param string $method - function name.
 	 * @param array  $args  - function call arguments.
-	 *
 	 * @return mixed
 	 */
 	public function __call( $method, $args ) {
@@ -54,21 +52,21 @@ class Customer extends Model {
 	}
 
 	/**
-	 * Initializes the Customer field resolvers
-	 *
-	 * @access protected
+	 * Initializes the Customer field resolvers.
 	 */
 	protected function init() {
 		if ( empty( $this->fields ) ) {
 			$this->fields = array(
 				'ID'                    => function() {
-					return $this->data->get_id();
+					return ( ! empty( $this->data->get_id() ) ) ? $this->data->get_id() : \WC()->session->_customer_id;
 				},
 				'id'                    => function() {
-					return ( ! empty( $this->data ) ) ? Relay::toGlobalId( 'customer', $this->data->get_id() ) : null;
+					return ( ! empty( $this->data->get_id() ) )
+						? Relay::toGlobalId( 'customer', $this->data->get_id() )
+						: 'guest';
 				},
-				'customerId'            => function() {
-					return ( ! empty( $this->data->get_id() ) ) ? $this->data->get_id() : null;
+				'databaseId'            => function() {
+					return $this->ID;
 				},
 				'isVatExempt'           => function() {
 					return ! is_null( $this->data->get_is_vat_exempt() ) ? $this->data->get_is_vat_exempt() : null;
